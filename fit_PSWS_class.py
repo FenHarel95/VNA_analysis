@@ -175,13 +175,13 @@ class ComplexFitter:
     #####################
     # Fit function
     #####################
-    def fit(self, f_min, f_max, f_array, y_re, y_im, p0, bounds=None):
+    def fit(self, f_min, f_max, f_array, y_re, y_im, p0):
         f_fit, y_fit, y_fit_re, y_fit_im = self.mask_arrays(f_min, f_max, f_array, y_re, y_im)
 
-        # Prepare parameter indices: which are free
+        # Free parameters
         param_indices = [i for i, name in enumerate(self.model.param_names) if name not in self.fixed]
 
-        # Wrap model to remove fixed parameters during fitting
+        # Wrap model
         def wrapped_model(f, *free_params):
             full_params = []
             free_idx = 0
@@ -193,22 +193,20 @@ class ComplexFitter:
                     free_idx += 1
             return self.model.model(f, *full_params)
 
-        # Prepare initial guesses for free parameters
+        # Initial guess
         p0_free = [p0[i] for i in param_indices]
 
-        # Bounds handling
-        if bounds is not None:
-            lower, upper = bounds
-            lower_free = [lower[i] for i in param_indices]
-            upper_free = [upper[i] for i in param_indices]
-            bounds_free = (lower_free, upper_free)
-        else:
-            bounds_free = (-np.inf, np.inf)
+        # Bounds conversion
+        lower_free = [self.model.lower_bounds[name] for i, name in enumerate(self.model.param_names) if
+                      name not in self.fixed]
+        upper_free = [self.model.upper_bounds[name] for i, name in enumerate(self.model.param_names) if
+                      name not in self.fixed]
+        bounds_free = (lower_free, upper_free)
 
-        # Perform the curve fit
+        # Fit
         params_free, cov = curve_fit(wrapped_model, f_fit, y_fit, p0=p0_free, bounds=bounds_free)
 
-        # Build full result dictionary including fixed params
+        # Build full results
         self.result = {}
         free_idx = 0
         for name in self.model.param_names:
