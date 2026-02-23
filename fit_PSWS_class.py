@@ -2,198 +2,238 @@ import numpy as np
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
+#########################
+# Global default definitions
+#########################
+DEFAULT_UNITS = {
+    "A": "pH/GHz",
+    "w": "GHz",
+    "fres": "GHz",
+    "fper": "GHz",
+    "fref": "GHz",
+    "D": "m",
+    "re0": "pH",
+    "im0": "pH"
+}
+
+DEFAULT_UNITS_2 = {
+    "A1": "pH/GHz",
+    "w1": "GHz",
+    "fres1": "GHz",
+    "fper1": "GHz",
+    "fref1": "GHz",
+    "D1": "m",
+    "A2": "pH/GHz",
+    "w2": "GHz",
+    "fres2": "GHz",
+    "fper2": "GHz",
+    "fref2": "GHz",
+    "D2": "m",
+    "re0": "pH",
+    "im0": "pH"
+}
+
+# Bounds stored as dicts keyed by parameter name
+LOWER_BOUNDS = {"A":0, "w":0.005, "fres":0.1, "fper":0.001, "fref":0.1, "D":0.1*1e-6, "re0":-10, "im0":-10}
+UPPER_BOUNDS = {"A":np.inf, "w":2, "fres":50, "fper":1, "fref":50, "D":1000*1e-6, "re0":10, "im0":10}
+LOWER_BOUNDS_2 = {
+            "A1":0, "w1":0.005, "fres1":0.1, "fper1":0.001, "fref1":0.1, "D1":0.1*1e-6,
+            "A2":0, "w2":0.05, "fres2":0.1, "fper2":0.001, "fref2":0.1, "D2":0.1*1e-6,
+            "re0":-10, "im0":-10
+        }
+UPPER_BOUNDS_2 = {
+            "A1":np.inf, "w1":2, "fres1":50, "fper1":1, "fref1":50, "D1":1000*1e-6,
+            "A2":np.inf, "w2":2, "fres2":50, "fper2":1, "fref2":50, "D2":1000*1e-6,
+            "re0":10, "im0":10
+        }
+#########################
+# Base Model Class
+#########################
 class BaseComplexModel:
+    """
+    Base class for all complex fitting models.
+    Stores parameter names, default units, and allows easy extension.
+    """
+    def __init__(self, param_names):
+        self.param_names = param_names
+        # Units default for all models
+        self.units = DEFAULT_UNITS.copy()
 
-    def __init__(self):
-        self.param_names = []
-        self.lower_bounds = []
-        self.upper_bounds = []
-
-    def evaluate(self, f, *params):
-        raise NotImplementedError
-
-def _base_complex_gaussian(f, A, w, fres, fper, fref, re0, im0):
-    re = re0 + (A/(w*np.sqrt(np.pi/2))) * \
-         np.exp(-2*((f-fres)/w)**2) * \
-         np.cos(2*np.pi*(f-fref)/fper)
-
-    im = im0 + (A/(w*np.sqrt(np.pi/2))) * \
-         np.exp(-2*((f-fres)/w)**2) * \
-         np.sin(2*np.pi*(f-fref)/fper)
-
-    return np.concatenate([re, im])
-
+#########################
+# Complex Gaussian Models
+#########################
 class ComplexGaussian(BaseComplexModel):
-
     def __init__(self):
-        super().__init__()
+        param_names = ["A", "w", "fres", "fper", "fref", "re0", "im0"]
+        super().__init__(param_names)
+        self.lower_bounds = LOWER_BOUNDS
+        self.upper_bounds = UPPER_BOUNDS
 
-        self.param_names = ["A","w","fres","fper","fref","re0","im0"]
-
-        self.lower_bounds = [0,0.005,0.1,0.001,0.1,-10,-10]
-        self.upper_bounds = [np.inf,2,50,1,50,10,10]
-
-    def evaluate(self, f, *p):
-        return _base_complex_gaussian(f, *p)
+    @staticmethod
+    def model(f, A, w, fres, fper, fref, re0, im0):
+        """
+        Single complex Gaussian with sinusoidal modulation.
+        Returns concatenated real + imaginary arrays for fitting.
+        """
+        exp_term = (A/(w*np.sqrt(np.pi/2)))*np.exp(-2*((f-fres)/w)**2)
+        re = re0 + exp_term * np.cos(2*np.pi*(f-fref)/fper)
+        im = im0 + exp_term * np.sin(2*np.pi*(f-fref)/fper)
+        return np.concatenate([re, im])
 
 class TwoComplexGaussian(BaseComplexModel):
-
     def __init__(self):
-        super().__init__()
+        param_names = ["A1", "w1", "fres1", "fper1", "fref1",
+                       "A2", "w2", "fres2", "fper2", "fref2", "re0", "im0"]
+        super().__init__(param_names)
+        self.units = DEFAULT_UNITS_2
+        self.lower_bounds = LOWER_BOUNDS_2
+        self.upper_bounds = UPPER_BOUNDS_2
 
-        self.param_names = [
-            "A1","w1","fres1","fper1","fref1",
-            "A2","w2","fres2","fper2","fref2",
-            "re0","im0"
-        ]
-
-        self.lower_bounds = [0,0.005,0.1,0.001,0.1,
-                             0,0.005,0.1,0.001,0.1,
-                             -10,-10]
-
-        self.upper_bounds = [np.inf,2,50,1,50,
-                             np.inf,2,50,1,50,
-                             10,10]
-
-    def evaluate(self, f, *p):
-        return (
-            _base_complex_gaussian(f, *p[:5], 0, 0)
-            + _base_complex_gaussian(f, *p[5:10], p[10], p[11])
-        )
-
-class TwoComplexGaussianPhi(BaseComplexModel):
-
-    def __init__(self):
-        super().__init__()
-
-        self.param_names = ["A","w","fres","fper","fref1","fref2","re0","im0"]
-
-        self.lower_bounds = [0,0.005,0.1,0.001,0.1,0.1,-10,-10]
-        self.upper_bounds = [np.inf,2,50,1,50,50,10,10]
-
-    def evaluate(self, f, *p):
-        return (
-            _base_complex_gaussian(f, p[0],p[1],p[2],p[3],p[4],0,0)
-            + _base_complex_gaussian(f, p[0],p[1],p[2],p[3],p[5],p[6],p[7])
-        )
+    @staticmethod
+    def model(f, A1, w1, fres1, fper1, fref1,
+                    A2, w2, fres2, fper2, fref2, re0, im0):
+        """
+        Sum of two complex Gaussians
+        """
+        z = (ComplexGaussian.model(f, A1, w1, fres1, fper1, fref1, 0, 0) +
+             ComplexGaussian.model(f, A2, w2, fres2, fper2, fref2, re0, im0))
+        return z
 
 class ComplexGaussianVG(BaseComplexModel):
-
     def __init__(self):
-        super().__init__()
+        param_names = ["A", "w", "fres", "D", "fref", "re0", "im0"]
+        super().__init__(param_names)
+        self.lower_bounds = LOWER_BOUNDS
+        self.upper_bounds = UPPER_BOUNDS
 
-        self.param_names = ["A","w","fres","D","fref","re0","im0"]
+    @staticmethod
+    def model(f, A, w, fres, D, fref, re0, im0):
+        """
+        Single Gaussian with vg(f)/D frequency scaling
+        """
+        vg_val = ComplexFitter.vg(f) / D
+        return ComplexGaussian.model(f, A, w, fres, vg_val, fref, re0, im0)
 
-        self.lower_bounds = [0,0.005,0.1,0.5e-6,0.1,-10,-10]
-        self.upper_bounds = [np.inf,2,50,50e-6,50,10,10]
+class TwoComplexGaussianVG(BaseComplexModel):
+    def __init__(self):
+        param_names = ["A1", "w1", "fres1", "D1", "fref1",
+                       "A2", "w2", "fres2", "D2", "fref2", "re0", "im0"]
+        super().__init__(param_names)
+        self.units = DEFAULT_UNITS_2
+        self.lower_bounds = LOWER_BOUNDS_2
+        self.upper_bounds = UPPER_BOUNDS_2
 
-    def evaluate(self, f, *p):
-        A,w,fres,D,fref,re0,im0 = p
-        return _base_complex_gaussian(f, A,w,fres, vg(f)/D, fref, re0, im0)
+    @staticmethod
+    def model(f, A1, w1, fres1, D1, fref1,
+                    A2, w2, fres2, D2, fref2, re0, im0):
+        z = (ComplexGaussianVG.model(f, A1, w1, fres1, D1, fref1, 0, 0) +
+             ComplexGaussianVG.model(f, A2, w2, fres2, D2, fref2, re0, im0))
+        return z
 
+#########################
+# Fitter Class
+#########################
 class ComplexFitter:
-
+    """
+    Handles fitting of complex models, including:
+    - masking frequency range
+    - fixing parameters
+    - bounds management
+    - plotting and summary
+    """
     def __init__(self, model: BaseComplexModel):
         self.model = model
-        self.fixed = {}
-        self.result = None
-        self.cov = None
+        self.fixed = {}        # fixed parameters {name: value}
+        self.result = {}       # fitted parameter results
+        self.cov = None        # covariance matrix
 
+    #####################
+    # Fix parameters
+    #####################
     def fix(self, **kwargs):
-        self.fixed.update(kwargs)
+        """
+        Fix parameters before fitting. Example:
+        fitter.fix(fper=0.25, re0=0.0)
+        """
+        for k, v in kwargs.items():
+            if k not in self.model.param_names:
+                raise ValueError(f"Parameter {k} not in model")
+            self.fixed[k] = v
 
-    def _wrapper(self, f, *free_params):
+    #####################
+    # Mask arrays by frequency window
+    #####################
+    @staticmethod
+    def mask_arrays(f_min, f_max, f_array, y_re, y_im):
+        mask = (f_array >= f_min) & (f_array <= f_max)
+        f_fit = f_array[mask]
+        y_fit_re = y_re[mask]
+        y_fit_im = y_im[mask]
+        y_fit = np.concatenate([y_fit_re, y_fit_im])
+        return f_fit, y_fit, y_fit_re, y_fit_im
 
-        full = []
-        idx = 0
+    #####################
+    # Fit function
+    #####################
+    def fit(self, f_min, f_max, f_array, y_re, y_im, p0, bounds=None):
+        f_fit, y_fit, y_fit_re, y_fit_im = self.mask_arrays(f_min, f_max, f_array, y_re, y_im)
 
+        # Prepare parameter indices: which are free
+        param_indices = [i for i, name in enumerate(self.model.param_names) if name not in self.fixed]
+
+        # Wrap model to remove fixed parameters during fitting
+        def wrapped_model(f, *free_params):
+            full_params = []
+            free_idx = 0
+            for name in self.model.param_names:
+                if name in self.fixed:
+                    full_params.append(self.fixed[name])
+                else:
+                    full_params.append(free_params[free_idx])
+                    free_idx += 1
+            return self.model.model(f, *full_params)
+
+        # Prepare initial guesses for free parameters
+        p0_free = [p0[i] for i in param_indices]
+
+        # Bounds handling
+        if bounds is not None:
+            lower, upper = bounds
+            lower_free = [lower[i] for i in param_indices]
+            upper_free = [upper[i] for i in param_indices]
+            bounds_free = (lower_free, upper_free)
+        else:
+            bounds_free = (-np.inf, np.inf)
+
+        # Perform the curve fit
+        params_free, cov = curve_fit(wrapped_model, f_fit, y_fit, p0=p0_free, bounds=bounds_free)
+
+        # Build full result dictionary including fixed params
+        self.result = {}
+        free_idx = 0
         for name in self.model.param_names:
             if name in self.fixed:
-                full.append(self.fixed[name])
+                self.result[name] = self.fixed[name]
             else:
-                full.append(free_params[idx])
-                idx += 1
+                self.result[name] = params_free[free_idx]
+                free_idx += 1
 
-        return self.model.evaluate(f, *full)
-
-    def fit(self, f_min, f_max, f_array, y_re, y_im, p0_full):
-
-        f_fit, y_fit, y_re_fit, y_im_fit = mask_arrays(
-            f_min, f_max, f_array, y_re, y_im
-        )
-
-        p0, lower, upper = self._prepare(p0_full)
-
-        params_free, cov = curve_fit(
-            self._wrapper,
-            f_fit,
-            y_fit,
-            p0=p0,
-            bounds=(lower, upper),
-            method='trf'
-        )
-
-        self.result = self._reconstruct(params_free)
         self.cov = cov
+        self.f_fit = f_fit
+        self.y_fit_re = y_fit_re
+        self.y_fit_im = y_fit_im
 
-        self.plot(f_fit, y_re_fit, y_im_fit)
+        return self.result, self.cov
 
-        return self.result, cov
-
-    def _prepare(self, p0_full):
-        p0 = []
-        lower = []
-        upper = []
-
-        for i, name in enumerate(self.model.param_names):
-            if name not in self.fixed:
-                p0.append(p0_full[i])
-                lower.append(self.model.lower_bounds[i])
-                upper.append(self.model.upper_bounds[i])
-
-        return p0, lower, upper
-
-    def _reconstruct(self, free):
-        full = {}
-        idx = 0
-
-        for name in self.model.param_names:
-            if name in self.fixed:
-                full[name] = self.fixed[name]
-            else:
-                full[name] = free[idx]
-                idx += 1
-
-        return full
-
-    def plot(self, f, y_re, y_im):
-        y_fit = self.model.evaluate(
-            f,
-            *[self.result[n] for n in self.model.param_names]
-        )
-
-        re_fit, im_fit = unconcatenate(y_fit)
-
-        plt.scatter(f, y_re, s=50, marker='o', facecolors='none', edgecolors='blue', label="Re")
-        plt.scatter(f, y_im, s=50, marker='o', facecolors='none', edgecolors='red', label="Im")
-        plt.plot(f, re_fit, 'cyan', label="Re_fit")
-        plt.plot(f, im_fit, 'yellow', label="Im_fit")
-        plt.axhline(0, color='black')
-        plt.gca().set_facecolor('#edf1f7')
-        plt.legend()
-        plt.show()
-
+    #####################
+    # Summary with uncertainties, scientific formatting, units
+    #####################
     def summary(self, digits=4):
-        """
-        Prints a formatted table of fit results with uncertainties, fixed parameters,
-        automatic scientific formatting, and units.
-        """
         print("\nFit Results")
         print("-" * 70)
         print(f"{'Parameter':<12}{'Value':>20}{'± Error':>15}{'Unit':>10}{'Fixed':>10}")
         print("-" * 70)
 
-        # Get errors from covariance if available
         if self.cov is not None:
             errors = np.sqrt(np.diag(self.cov))
         else:
@@ -203,7 +243,7 @@ class ComplexFitter:
 
         for name in self.model.param_names:
             value = self.result[name]
-            unit = getattr(self.model, "units", {}).get(name, "")
+            unit = self.model.units.get(name, "")
 
             # Scientific formatting for very small or large values
             if abs(value) < 1e-3 or abs(value) > 1e3:
@@ -216,11 +256,11 @@ class ComplexFitter:
                 fixed = "Yes"
             else:
                 if errors is not None:
-                    err = errors[free_index]
-                    if abs(err) < 1e-3 or abs(err) > 1e3:
-                        err_str = f"{err:.3e}"
+                    err_val = errors[free_index]
+                    if abs(err_val) < 1e-3 or abs(err_val) > 1e3:
+                        err_str = f"{err_val:.3e}"
                     else:
-                        err_str = f"{err:.{digits}f}"
+                        err_str = f"{err_val:.{digits}f}"
                 else:
                     err_str = "-"
                 free_index += 1
@@ -230,43 +270,48 @@ class ComplexFitter:
 
         print("-" * 70)
 
+    #####################
+    # Plot the fit
+    #####################
+    @staticmethod
+    def unconcatenate(z):
+        N = len(z)//2
+        return z[:N], z[N:]
 
-#####################Tools
-def unconcatenate(z):
-    N = len(z) // 2
-    real = z[:N]
-    imag = z[N:]
-    return real, imag
+    def plot_fit(self, f_model=None):
+        """
+        Plot real and imaginary parts with data and fit.
+        """
+        if f_model is None:
+            f_model = self.model.model
 
-def mask_arrays(f_min, f_max, f_arry, y_array_re, y_array_im):
-    mask = (f_arry >= f_min) & (f_arry <= f_max)
-    f_fit = f_arry[mask]
-    y_fit_re = y_array_re[mask]
-    y_fit_im = y_array_im[mask]
-    y_fit = np.concatenate([y_fit_re, y_fit_im])
-    return f_fit, y_fit, y_fit_re, y_fit_im
+        plt.scatter(self.f_fit, self.y_fit_re, s=50, facecolors='none', edgecolors='blue', label="Re")
+        plt.scatter(self.f_fit, self.y_fit_im, s=50, facecolors='none', edgecolors='red', label="Im")
 
-def plot_fit(f, results):
-    """Formated plot of the results (formated correctly) of fitting complex functions"""
-    plt.scatter(results[2], results[3], s=50, marker='o', facecolors='none', edgecolors='blue', label="Re")
-    plt.scatter(results[2], results[4], s=50, marker='o', facecolors='none', edgecolors='red', label="Im")
-    plt.plot(results[2], unconcatenate(f(results[2], *results[0]))[0], 'cyan', label="Re_fit")
-    plt.plot(results[2], unconcatenate(f(results[2], *results[0]))[1], 'yellow', label="Im_fit")
-    plt.axhline(0, color='black', linewidth=1)
-    plt.gca().set_facecolor('#edf1f7')
-    plt.xlabel("Frequency (GHz)")
-    plt.ylabel("dLij (pH)")
-    plt.title("Fitting Results")
-    plt.legend()
-    plt.show()
+        fit_vals = f_model(self.f_fit, *[self.result[name] for name in self.model.param_names])
+        fit_re, fit_im = self.unconcatenate(fit_vals)
 
-def vg(f):
-    """For now, Vg for magnetostatic DE in YIG in GHz*m units"""
-    mu_o = 4*np.pi*1e-7
-    t = 105*1e-9 #m
-    k = 2.95*1e6 # rad/m
-    M = 139.6*1e3*mu_o #T
-    H_eff = M
-    gamma = 182.21/(2*np.pi) #GHz/T
+        plt.plot(self.f_fit, fit_re, 'cyan', label="Re_fit")
+        plt.plot(self.f_fit, fit_im, 'yellow', label="Im_fit")
 
-    return (2*np.pi) * gamma*gamma*M*H_eff*t*np.exp(-2*k*t)/(4*f)
+        plt.axhline(0, color='black', linewidth=1)
+        plt.gca().set_facecolor('#edf1f7')
+        plt.xlabel("Frequency (GHz)")
+        plt.ylabel("dLij (pH)")
+        plt.title("Fitting Results")
+        plt.legend()
+        plt.show()
+
+    #####################
+    # Example vg function for DE spin waves
+    #####################
+    @staticmethod
+    def vg(f):
+        mu_o = 4*np.pi*1e-7
+        t = 105*1e-9  # m
+        k = 2.95*1e6  # rad/m
+        M = 139.6*1e3*mu_o  # T
+        H_eff = M
+        gamma = 182.21/(2*np.pi)  # GHz/T
+
+        return (2*np.pi) * gamma*gamma*M*H_eff*t*np.exp(-2*k*t)/(4*f)
