@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, minimize
 import matplotlib.pyplot as plt
 
 #########################
@@ -161,6 +161,16 @@ class ComplexFitter:
             self.fixed[k] = v
 
     #####################
+    # Simplex for initial params
+    #####################
+    def simplex(self, f, params, x, y):
+        def error(params, x, y):
+            model = self.model.model(x, *params)
+            return np.sum(np.abs(y - model)**2)
+        minim = minimize(error, params, args=(x, y), method='Nelder-Mead')
+        return minim.x
+
+    #####################
     # Mask arrays by frequency window
     #####################
     @staticmethod
@@ -175,7 +185,7 @@ class ComplexFitter:
     #####################
     # Fit function
     #####################
-    def fit(self, f_min, f_max, f_array, y_re, y_im, p0):
+    def fit(self, f_min, f_max, f_array, y_re, y_im, p0, simplex_b:bool):
         f_fit, y_fit, y_fit_re, y_fit_im = self.mask_arrays(f_min, f_max, f_array, y_re, y_im)
 
         # Free parameters
@@ -195,6 +205,9 @@ class ComplexFitter:
 
         # Initial guess
         p0_free = [p0[i] for i in param_indices]
+
+        if simplex_b:
+            p0_free = self.simplex(wrapped_model, p0_free, f_fit, y_fit)
 
         # Bounds conversion
         lower_free = [self.model.lower_bounds[name] for i, name in enumerate(self.model.param_names) if
