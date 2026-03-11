@@ -187,33 +187,35 @@ class ComplexFitter:
     # Fixing parameters
     #####################
     def fix(self, **kwargs):
-        """
-        Fix parameters of choise (kwargs) before fitting. e.g: fix(fper=0.25, re0=0.0)
-        """
-        for k, v in kwargs.items():
-            if k not in self.model.param_names:
-                raise ValueError(f"Parameter {k} not in model")
-            self.fixed[k] = v #Stores fixed parameters
+        
+        self.fixed = {}
+        self.bounds_free = 0
+        self.param_indices_free = []
+        self.param_names_free = []
 
-        if kwargs=={}: #Takes care of the case of redefinition of fixed parameters when non is specified.
-            self.fixed={}
+        if kwargs == {}:
+            self.fixed = {}
+        else:
+            for k, v in kwargs.items():
+                if k not in self.model.param_names:
+                    raise ValueError(f"Parameter {k} not in model")
+                self.fixed[k] = v
 
-        # Free parameters
-        self.param_indices_free = [i for i, name in enumerate(self.model.param_names) if name not in self.fixed]
-        for i, name in enumerate(self.model.param_names):
-            if name not in self.fixed:
-                #self.param_indices_free.append(i)
-                self.param_names_free.append(name)
-        # Initial guess
-        self.p0_free = [self.p0[i] for i in self.param_indices_free] #array of values for
+        self.param_names_free = [
+            name for name in self.model.param_names if name not in self.fixed
+        ]
 
-        # Bounds conversion to take into account fixed parameters
-        lower_free = [self.model.lower_bounds[name] for i, name in enumerate(self.model.param_names) if
-                      name not in self.fixed]
-        upper_free = [self.model.upper_bounds[name] for i, name in enumerate(self.model.param_names) if
-                      name not in self.fixed]
-        self.bounds_free = (lower_free, upper_free) #Defines the bounds for the free parameters of the model
-        print(self.p0_free)
+        self.param_indices_free = [
+            i for i, name in enumerate(self.model.param_names)
+            if name not in self.fixed
+        ]
+
+        self.p0_free = [self.p0[i] for i in self.param_indices_free]
+
+        lower_free = [self.model.lower_bounds[n] for n in self.param_names_free]
+        upper_free = [self.model.upper_bounds[n] for n in self.param_names_free]
+
+        self.bounds_free = (lower_free, upper_free)
     #####################
     # Simplex for initial params
     #####################
