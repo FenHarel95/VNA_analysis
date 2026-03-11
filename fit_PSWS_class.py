@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.optimize import curve_fit, minimize
 import matplotlib.pyplot as plt
+import ipywidgets as widgets
+from ipywidgets import interact
 
 #########################
 # Global default definitions
@@ -403,23 +405,19 @@ class ComplexFitter:
         return z[:N], z[N:]
 
     #####################
-    # Plot the fit
+    # Plotting fits
     #####################
-    def plot_fit(self, simplex_b:bool, f_model=None):
+    def plot_data_fit(self, param_set):
         """
-        Plot real and imaginary parts with data and fit. simplex_b option to plot the results of simplex_wpm()
+        Plot real and imaginary parts with data and the model using param_set.
         """
-        if f_model is None:
-            f_model = self.model.model
-
         plt.scatter(self.mask_f, self.mask_y_re, s=50, facecolors='none', edgecolors='blue', label="Re")
         plt.scatter(self.mask_f, self.mask_y_im, s=50, facecolors='none', edgecolors='red', label="Im")
 
-        if simplex_b:
-            fit_vals = f_model(self.mask_f, *[self.result_simplex_wpm[name] for name in self.model.param_names])
-        else:
-            fit_vals = f_model(self.mask_f, *[self.result[name] for name in self.model.param_names])
-        fit_re, fit_im = self.unconcatenate(fit_vals)
+        param_vals = self.model.model(self.mask_f, *[param_set[name] for name in self.model.param_names])
+
+
+        fit_re, fit_im = self.unconcatenate(param_vals)
 
         plt.plot(self.mask_f, fit_re, 'cyan', label="Re_fit")
         plt.plot(self.mask_f, fit_im, 'yellow', label="Im_fit")
@@ -431,6 +429,58 @@ class ComplexFitter:
         plt.title("Fitting Results")
         plt.legend()
         plt.show()
+
+    def plot_fit_simplex_wpm(self):
+        """
+        Plots directly the result from the simplex_wpm().
+        """
+        self.plot_data_fit(self.result_simplex_wpm)
+
+    def plot_fit(self):
+        """
+        Plots directly the result from the fit().
+        """
+        self.plot_data_fit(self.result)
+
+    def param_manipulator(self, variation, step, param_set):
+        """
+        Creates a plot of data and model (param_set) with option to manipulate the parameters based on:
+         variation (max. percentage of deviation from original value) and step (steps for manipulation)
+        """
+        relative_sliders = {}
+
+        for name in param_set:
+            relative_sliders[name] = widgets.FloatSlider(
+                value=1.0,
+                min=1 - variation,
+                max=1 + variation,
+                step=step,
+                description="F*" + name + ", F=",
+                readout_format='.4f',
+                continuous_update=False
+            )
+
+        def wrapper(**multipliers):
+            """
+            Multiply parameters by widget-provided multipliers and plot the fit.
+            """
+            #Compute new parameter values
+            new_params = {
+                name: param_set[name] * multipliers.get(name, 1.0)
+                for name in param_set
+            }
+
+            #Pass the dictionary directly (no **kwargs!)
+            self.plot_data_fit(param_set=new_params)
+        interact(wrapper, **relative_sliders)
+
+    def manipulator_simplex_wpm(self, variation, step):
+        """Manipulator for the results of simplex_wpm()"""
+        self.param_manipulator(variation, step, self.result_simplex_wpm)
+
+    def manipulator_fit(self, variation, step):
+        """Manipulator for the results of simplex_wpm()"""
+        self.param_manipulator(variation, step, self.result)
 
     #####################
     # Example vg function for DE spin waves
