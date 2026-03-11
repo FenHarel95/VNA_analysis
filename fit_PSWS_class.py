@@ -141,31 +141,66 @@ class ComplexFitter:
     - bounds management
     - plotting and summary
     """
-    def __init__(self, model: BaseComplexModel):
-        self.model = model
+    def __init__(self,  p0, f_min, f_max, f_array, y_re, y_im, model:BaseComplexModel):
+        self.p0=p0 #initial parameters
+        self.p0_free = p0 #changed later by fix()
+
+        self.f_min = f_min #minimum freq. for fit
+        self.f_max = f_max #maxium freq. for fit
+        self.f_array = f_array #frequency values
+        self.y_re = y_re #real part of measurements values
+        self.y_im = y_im #imag. part of measurements values
+
+        self.mask_f, self.mask_y, self.mask_y_re, self.mask_y_im =\
+            self.mask_arrays(f_min, f_max, f_array, y_re, y_im)
+        #already mask the used arrays to the freq. span of interest
+
         self.fixed = {}        # fixed parameters {name: value}
-        self.result = {}       # fitted parameter results
+        self.bounds_free = 0 #Initial variable to store bounds for remaining free variables only
+
+        self.model = model  # The model used for fitting (see above the model available)
+        self.result_simplex_wpm={} # fitted parameter results using simplex
+        self.result = []       # fitted parameter results
         self.cov = None        # covariance matrix
 
     #####################
-    # Fix parameters
+    # Fixing parameters
     #####################
     def fix(self, **kwargs):
         """
-        Fix parameters before fitting. Example:
-        fitter.fix(fper=0.25, re0=0.0)
+        Fix parameters of choise (kwargs) before fitting. e.g: fix(fper=0.25, re0=0.0)
         """
         for k, v in kwargs.items():
             if k not in self.model.param_names:
                 raise ValueError(f"Parameter {k} not in model")
-            self.fixed[k] = v
+            self.fixed[k] = v #Stores fixed parameters
+
+        # Free parameters
+        self.param_indices = [i for i, name in enumerate(self.model.param_names) if name not in self.fixed]
+        # Initial guess
+        self.p0_free = [self.p0[i] for i in self.param_indices]
+
+        # Bounds conversion to take into account fixed parameters
+        lower_free = [self.model.lower_bounds[name] for i, name in enumerate(self.model.param_names) if
+                      name not in self.fixed]
+        upper_free = [self.model.upper_bounds[name] for i, name in enumerate(self.model.param_names) if
+                      name not in self.fixed]
+        self.bounds_free = (lower_free, upper_free) #Defines the bounds for the free parameters of the model
 
     #####################
     # Simplex for initial params
     #####################
     def simplex(self, f, params, x, y):
+        """
+        Performs a simplex optimization of parameters param, for function f, with x and y values.
+        Penalizes optimization (large error) when the parameters are out of bounds.
+        """
         def error(params, x, y):
-            model = self.model.model(x, *params)
+            for i, name in enumerate(self.model.param_names):
+                if params[i] < self.model.lower_bounds[name] or params[i] > self.model.upper_bounds[name]:
+                   return 1e20 #Penalizes parameter when out of bounds
+
+            model = f(x, *params)
             return np.sum(np.abs(y - model)**2)
         minim = minimize(error, params, args=(x, y), method='Nelder-Mead')
         return minim.x
@@ -175,6 +210,9 @@ class ComplexFitter:
     #####################
     @staticmethod
     def mask_arrays(f_min, f_max, f_array, y_re, y_im):
+        """
+        Mask the mesurement arrays to the freq. domain  of interest.
+        """
         mask = (f_array >= f_min) & (f_array <= f_max)
         f_fit = f_array[mask]
         y_fit_re = y_re[mask]
@@ -183,56 +221,72 @@ class ComplexFitter:
         return f_fit, y_fit, y_fit_re, y_fit_im
 
     #####################
-    # Fit function
+    # Wrap model (limited for free parameters)
     #####################
-    def fit(self, f_min, f_max, f_array, y_re, y_im, p0, simplex_b:bool):
-        f_fit, y_fit, y_fit_re, y_fit_im = self.mask_arrays(f_min, f_max, f_array, y_re, y_im)
-
-        # Free parameters
-        param_indices = [i for i, name in enumerate(self.model.param_names) if name not in self.fixed]
-
-        # Wrap model
-        def wrapped_model(f, *free_params):
-            full_params = []
-            free_idx = 0
-            for name in self.model.param_names:
-                if name in self.fixed:
-                    full_params.append(self.fixed[name])
-                else:
-                    full_params.append(free_params[free_idx])
-                    free_idx += 1
-            return self.model.model(f, *full_params)
-
-        # Initial guess
-        p0_free = [p0[i] for i in param_indices]
-
-        if simplex_b:
-            p0_free = self.simplex(wrapped_model, p0_free, f_fit, y_fit)
-
-        # Bounds conversion
-        lower_free = [self.model.lower_bounds[name] for i, name in enumerate(self.model.param_names) if
-                      name not in self.fixed]
-        upper_free = [self.model.upper_bounds[name] for i, name in enumerate(self.model.param_names) if
-                      name not in self.fixed]
-        bounds_free = (lower_free, upper_free)
-
-        # Fit
-        params_free, cov = curve_fit(wrapped_model, f_fit, y_fit, p0=p0_free, bounds=bounds_free)
-
-        # Build full results
-        self.result = {}
+    def wrapped_model(self, f, *free_params):
+        """
+        Fixes some parameters in a general model and returns a simplified one.
+        """
+        full_params = []
         free_idx = 0
         for name in self.model.param_names:
             if name in self.fixed:
-                self.result[name] = self.fixed[name]
+                full_params.append(self.fixed[name])
             else:
-                self.result[name] = params_free[free_idx]
+                full_params.append(free_params[free_idx])
                 free_idx += 1
+        return self.model.model(f, *full_params)
 
+    def list_results(self, optimized):
+        """
+        Builds a dictionary with the parameters of the model using the values in optimized
+        """
+        results = {}
+        free_idx = 0
+        for name in self.model.param_names:
+            if name in self.fixed:
+                results[name] = self.fixed[name]
+            else:
+                results[name] = optimized[free_idx]
+                free_idx += 1
+        return results
+
+    def simplex_wpm(self):
+        """
+        Executes simplex on the constrained model (wrapped_model)
+        """
+        new_p0 = self.simplex(self.wrapped_model, self.p0_free, self.mask_f, self.mask_y)
+        self.result_simplex_wpm = self.list_results(new_p0)
+
+        return  self.result_simplex_wpm
+
+    def update_p0(self, new_p0, **kwargs):
+        """
+        Updates the initial parameters (new_p0) and the ones fixed (kwargs)
+        """
+        self.p0 = new_p0
+        self.fix(**kwargs)
+
+    #####################
+    # Fit function
+    #####################
+    def fit(self, simplex_b:bool):
+        """
+        Fits the masked data (mask_...) to the constrained model (wrapped_model), using initial parameters (p0_fit).
+        With option for an internal simplex (simplex_b) to obtain "better" initial parameters.
+        """
+        #Optional internal Simplex run
+        if simplex_b:
+            p0_fit = self.simplex_wpm()
+        else:
+            p0_fit = self.p0_free
+
+        # Actual Fit
+        params_free, cov = curve_fit(self.wrapped_model, self.mask_f, self.mask_y, p0=p0_fit, bounds=self.bounds_free)
+
+        # Build full results
+        self.result = self.list_results(params_free)
         self.cov = cov
-        self.f_fit = f_fit
-        self.y_fit_re = y_fit_re
-        self.y_fit_im = y_fit_im
 
         return self.result, self.cov
 
@@ -240,6 +294,9 @@ class ComplexFitter:
     # Summary with uncertainties, scientific formatting, units
     #####################
     def summary(self, digits=4):
+        """
+        Summary table of the results of fit().
+        """
         print("\nFit Results")
         print("-" * 70)
         print(f"{'Parameter':<12}{'Value':>20}{'± Error':>15}{'Unit':>10}{'Fixed':>10}")
@@ -286,24 +343,30 @@ class ComplexFitter:
     #####################
     @staticmethod
     def unconcatenate(z):
+        """
+        Unconcatenate array z. In the current context, gives back the Re and Im parts of a concattenated Z array.
+        """
         N = len(z)//2
         return z[:N], z[N:]
 
-    def plot_fit(self, f_model=None):
+    def plot_fit(self, simplex_b:bool, f_model=None):
         """
-        Plot real and imaginary parts with data and fit.
+        Plot real and imaginary parts with data and fit. simplex_b option to plot the results of simplex_wpm()
         """
         if f_model is None:
             f_model = self.model.model
 
-        plt.scatter(self.f_fit, self.y_fit_re, s=50, facecolors='none', edgecolors='blue', label="Re")
-        plt.scatter(self.f_fit, self.y_fit_im, s=50, facecolors='none', edgecolors='red', label="Im")
+        plt.scatter(self.mask_f, self.mask_y_re, s=50, facecolors='none', edgecolors='blue', label="Re")
+        plt.scatter(self.mask_f, self.mask_y_im, s=50, facecolors='none', edgecolors='red', label="Im")
 
-        fit_vals = f_model(self.f_fit, *[self.result[name] for name in self.model.param_names])
+        if simplex_b:
+            fit_vals = f_model(self.mask_f, *[self.result_simplex_wpm[name] for name in self.model.param_names])
+        else:
+            fit_vals = f_model(self.mask_f, *[self.result[name] for name in self.model.param_names])
         fit_re, fit_im = self.unconcatenate(fit_vals)
 
-        plt.plot(self.f_fit, fit_re, 'cyan', label="Re_fit")
-        plt.plot(self.f_fit, fit_im, 'yellow', label="Im_fit")
+        plt.plot(self.mask_f, fit_re, 'cyan', label="Re_fit")
+        plt.plot(self.mask_f, fit_im, 'yellow', label="Im_fit")
 
         plt.axhline(0, color='black', linewidth=1)
         plt.gca().set_facecolor('#edf1f7')
@@ -318,6 +381,9 @@ class ComplexFitter:
     #####################
     @staticmethod
     def vg(f):
+        """
+        Group velocity of magnetostatic surface waves in YIG (n=0)
+        """
         mu_o = 4*np.pi*1e-7
         t = 105*1e-9  # m
         k = 2.95*1e6  # rad/m
