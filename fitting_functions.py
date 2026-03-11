@@ -26,10 +26,26 @@ def complx_gaussian(f, A, w, fres, fper, fref, re0, im0):
     im = im0 + (A/(w*np.sqrt(np.pi/2)))*np.exp(-2*((f-fres)/w)*((f-fres)/w))*np.sin(2*np.pi*(f-fref)/fper)
     return np.concatenate([re, im])
 
+def complx_gaussian_simple(f, A, w, fres, fper, phi, re0, im0):
+    exp_term = A * np.exp(-2 * ((f - fres) / w) ** 2)
+
+    phase = 2 * np.pi * f / fper - phi
+
+    re = re0 + exp_term * np.cos(phase)
+    im = im0 + exp_term * np.sin(phase)
+
+    return np.concatenate([re, im])
+
 def two_complx_gaussian(f, A1, w1, fres1, fper1, fref1,
                            A2, w2, fres2, fper2, fref2, re0, im0):
     z = (complx_gaussian(f, A1, w1, fres1, fper1, fref1, 0, 0)
          + complx_gaussian(f, A2, w2, fres2, fper2, fref2, re0, im0))
+    return z
+
+def two_complx_gaussian_simple(f, A1, w1, fres1, fper1, phi1,
+                           A2, w2, fres2, fper2, phi2, re0, im0):
+    z = (complx_gaussian_simple(f, A1, w1, fres1, fper1, phi1, 0, 0)
+         + complx_gaussian_simple(f, A2, w2, fres2, fper2, phi2, re0, im0))
     return z
 
 def two_complx_gaussian_phi(f, A1, w1, fres1, fper1, fref1,
