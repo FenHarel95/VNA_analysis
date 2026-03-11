@@ -34,11 +34,11 @@ DEFAULT_UNITS_2 = {
 }
 
 # Bounds stored as dicts keyed by parameter name
-LOWER_BOUNDS = {"A":0, "w":0.005, "fres":0.1, "fper":0.001, "fref":0.1, "D":0.1*1e-6, "re0":-10, "im0":-10}
-UPPER_BOUNDS = {"A":np.inf, "w":2, "fres":50, "fper":1, "fref":50, "D":1000*1e-6, "re0":10, "im0":10}
+LOWER_BOUNDS = {"A":1e-1, "w":0.005, "fres":0.1, "fper":0.001, "fref":0.1, "phi":0, "D":0.1*1e-6, "re0":-10, "im0":-10}
+UPPER_BOUNDS = {"A":np.inf, "w":2, "fres":50, "fper":1, "fref":50, "phi":2*np.pi, "D":1000*1e-6, "re0":10, "im0":10}
 LOWER_BOUNDS_2 = {
-            "A1":0, "w1":0.005, "fres1":0.1, "fper1":0.001, "fref1":0.1, "D1":0.1*1e-6,
-            "A2":0, "w2":0.05, "fres2":0.1, "fper2":0.001, "fref2":0.1, "D2":0.1*1e-6,
+            "A1":1e-1, "w1":0.005, "fres1":0.1, "fper1":0.001, "fref1":0.1, "D1":0.1*1e-6,
+            "A2":1e-1, "w2":0.05, "fres2":0.1, "fper2":0.001, "fref2":0.1, "D2":0.1*1e-6,
             "re0":-10, "im0":-10
         }
 UPPER_BOUNDS_2 = {
@@ -78,6 +78,24 @@ class ComplexGaussian(BaseComplexModel):
         exp_term = (A/(w*np.sqrt(np.pi/2)))*np.exp(-2*((f-fres)/w)**2)
         re = re0 + exp_term * np.cos(2*np.pi*(f-fref)/fper)
         im = im0 + exp_term * np.sin(2*np.pi*(f-fref)/fper)
+        return np.concatenate([re, im])
+
+class ComplexGaussian_simple(BaseComplexModel):
+    def __init__(self):
+        param_names = ["A", "w", "fres", "fper", "phi", "re0", "im0"]
+        super().__init__(param_names)
+        self.lower_bounds = LOWER_BOUNDS
+        self.upper_bounds = UPPER_BOUNDS
+
+    @staticmethod
+    def model(f, A, w, fres, fper, phi, re0, im0):
+        exp_term = A * np.exp(-2 * ((f - fres) / w) ** 2)
+
+        phase = 2 * np.pi * f / fper - phi
+
+        re = re0 + exp_term * np.cos(phase)
+        im = im0 + exp_term * np.sin(phase)
+
         return np.concatenate([re, im])
 
 class TwoComplexGaussian(BaseComplexModel):
@@ -157,6 +175,8 @@ class ComplexFitter:
 
         self.fixed = {}        # fixed parameters {name: value}
         self.bounds_free = 0 #Initial variable to store bounds for remaining free variables only
+        self.param_indices_free = []
+        self.param_names_free = []
 
         self.model = model  # The model used for fitting (see above the model available)
         self.result_simplex_wpm={} # fitted parameter results using simplex
@@ -175,10 +195,17 @@ class ComplexFitter:
                 raise ValueError(f"Parameter {k} not in model")
             self.fixed[k] = v #Stores fixed parameters
 
+        if kwargs=={}: #Takes care of the case of redefinition of fixed parameters when non is specified.
+            self.fixed={}
+
         # Free parameters
-        self.param_indices = [i for i, name in enumerate(self.model.param_names) if name not in self.fixed]
+        self.param_indices_free = [i for i, name in enumerate(self.model.param_names) if name not in self.fixed]
+        for i, name in enumerate(self.model.param_names):
+            if name not in self.fixed:
+                #self.param_indices_free.append(i)
+                self.param_names_free.append(name)
         # Initial guess
-        self.p0_free = [self.p0[i] for i in self.param_indices]
+        self.p0_free = [self.p0[i] for i in self.param_indices_free] #array of values for
 
         # Bounds conversion to take into account fixed parameters
         lower_free = [self.model.lower_bounds[name] for i, name in enumerate(self.model.param_names) if
@@ -186,23 +213,30 @@ class ComplexFitter:
         upper_free = [self.model.upper_bounds[name] for i, name in enumerate(self.model.param_names) if
                       name not in self.fixed]
         self.bounds_free = (lower_free, upper_free) #Defines the bounds for the free parameters of the model
-
+        print(self.p0_free)
     #####################
     # Simplex for initial params
     #####################
-    def simplex(self, f, params, x, y):
+    def simplex(self, f, params, x, y, method='Powell'):
         """
         Performs a simplex optimization of parameters param, for function f, with x and y values.
         Penalizes optimization (large error) when the parameters are out of bounds.
+        For method, use: 'Nelder-Mead' or 'Powell'
         """
+        simplex_bounds = [(self.model.lower_bounds[name], self.model.upper_bounds[name])
+                          for name in self.param_names_free]
         def error(params, x, y):
-            for i, name in enumerate(self.model.param_names):
-                if params[i] < self.model.lower_bounds[name] or params[i] > self.model.upper_bounds[name]:
-                   return 1e20 #Penalizes parameter when out of bounds
+            if method=='Nelder-Mead':
+                for i, name in enumerate(self.param_names_free):
+                    if params[i] < self.model.lower_bounds[name] or params[i] > self.model.upper_bounds[name]:
+                       return 1e20 #Penalizes parameter when out of bounds
 
             model = f(x, *params)
             return np.sum(np.abs(y - model)**2)
-        minim = minimize(error, params, args=(x, y), method='Nelder-Mead')
+        if method=='Nelder-Mead':
+            minim = minimize(error, params, args=(x, y), method='Nelder-Mead')
+        else:
+            minim = minimize(error, params, args=(x, y), method='Powell', bounds= simplex_bounds)
         return minim.x
 
     #####################
@@ -251,11 +285,12 @@ class ComplexFitter:
                 free_idx += 1
         return results
 
-    def simplex_wpm(self):
+    def simplex_wpm(self, method='Powell'):
         """
-        Executes simplex on the constrained model (wrapped_model)
+        Executes simplex on the constrained model (wrapped_model).
+        For method, use: 'Nelder-Mead' or 'Powell'
         """
-        new_p0 = self.simplex(self.wrapped_model, self.p0_free, self.mask_f, self.mask_y)
+        new_p0 = self.simplex(self.wrapped_model, self.p0_free, self.mask_f, self.mask_y, method)
         self.result_simplex_wpm = self.list_results(new_p0)
 
         return  self.result_simplex_wpm
