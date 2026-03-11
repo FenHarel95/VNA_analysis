@@ -38,12 +38,12 @@ LOWER_BOUNDS = {"A":1e-1, "w":0.005, "fres":0.1, "fper":0.001, "fref":0.1, "phi"
 UPPER_BOUNDS = {"A":np.inf, "w":2, "fres":50, "fper":1, "fref":50, "phi":2*np.pi, "D":1000*1e-6, "re0":10, "im0":10}
 LOWER_BOUNDS_2 = {
             "A1":1e-1, "w1":0.005, "fres1":0.1, "fper1":0.001, "fref1":0.1, "D1":0.1*1e-6,
-            "A2":1e-1, "w2":0.05, "fres2":0.1, "fper2":0.001, "fref2":0.1, "D2":0.1*1e-6,
+            "A2":1e-1, "w2":0.05, "fres2":0.1, "fper2":0.001, "fref2":0.1, "phi1":0, "phi2":0, "D2":0.1*1e-6,
             "re0":-10, "im0":-10
         }
 UPPER_BOUNDS_2 = {
             "A1":np.inf, "w1":2, "fres1":50, "fper1":1, "fref1":50, "D1":1000*1e-6,
-            "A2":np.inf, "w2":2, "fres2":50, "fper2":1, "fref2":50, "D2":1000*1e-6,
+            "A2":np.inf, "w2":2, "fres2":50, "fper2":1, "fref2":50, "phi1":2*np.pi, "phi2":2*np.pi, "D2":1000*1e-6,
             "re0":10, "im0":10
         }
 #########################
@@ -80,7 +80,7 @@ class ComplexGaussian(BaseComplexModel):
         im = im0 + exp_term * np.sin(2*np.pi*(f-fref)/fper)
         return np.concatenate([re, im])
 
-class ComplexGaussian_simple(BaseComplexModel):
+class ComplexGaussianSimple(BaseComplexModel):
     def __init__(self):
         param_names = ["A", "w", "fres", "fper", "phi", "re0", "im0"]
         super().__init__(param_names)
@@ -115,6 +115,25 @@ class TwoComplexGaussian(BaseComplexModel):
         """
         z = (ComplexGaussian.model(f, A1, w1, fres1, fper1, fref1, 0, 0) +
              ComplexGaussian.model(f, A2, w2, fres2, fper2, fref2, re0, im0))
+        return z
+
+class TwoComplexGaussianSimple(BaseComplexModel):
+    def __init__(self):
+        param_names = ["A1", "w1", "fres1", "fper1", "phi1",
+                       "A2", "w2", "fres2", "fper2", "phi2", "re0", "im0"]
+        super().__init__(param_names)
+        self.units = DEFAULT_UNITS_2
+        self.lower_bounds = LOWER_BOUNDS_2
+        self.upper_bounds = UPPER_BOUNDS_2
+
+    @staticmethod
+    def model(f, A1, w1, fres1, fper1, phi1,
+                    A2, w2, fres2, fper2, phi2, re0, im0):
+        """
+        Sum of two complex Gaussians
+        """
+        z = (ComplexGaussianSimple.model(f, A1, w1, fres1, fper1, phi1, 0, 0) +
+             ComplexGaussianSimple.model(f, A2, w2, fres2, fper2, phi2, re0, im0))
         return z
 
 class ComplexGaussianVG(BaseComplexModel):
@@ -187,7 +206,7 @@ class ComplexFitter:
     # Fixing parameters
     #####################
     def fix(self, **kwargs):
-        
+
         self.fixed = {}
         self.bounds_free = 0
         self.param_indices_free = []
@@ -375,9 +394,6 @@ class ComplexFitter:
 
         print("-" * 70)
 
-    #####################
-    # Plot the fit
-    #####################
     @staticmethod
     def unconcatenate(z):
         """
@@ -386,6 +402,9 @@ class ComplexFitter:
         N = len(z)//2
         return z[:N], z[N:]
 
+    #####################
+    # Plot the fit
+    #####################
     def plot_fit(self, simplex_b:bool, f_model=None):
         """
         Plot real and imaginary parts with data and fit. simplex_b option to plot the results of simplex_wpm()
