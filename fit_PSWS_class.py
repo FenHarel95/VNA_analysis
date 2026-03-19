@@ -13,6 +13,7 @@ DEFAULT_UNITS = {
     "fres": "GHz",
     "fper": "GHz",
     "fref": "GHz",
+    "phi" : "rad",
     "D": "m",
     "re0": "pH",
     "im0": "pH"
@@ -25,12 +26,14 @@ DEFAULT_UNITS_2 = {
     "fper1": "GHz",
     "fref1": "GHz",
     "D1": "m",
+    "phi1" : "rad",
     "A2": "pH/GHz",
     "w2": "GHz",
     "fres2": "GHz",
     "fper2": "GHz",
     "fref2": "GHz",
     "D2": "m",
+    "phi2" : "rad",
     "re0": "pH",
     "im0": "pH"
 }
@@ -472,6 +475,7 @@ class ComplexFitter:
 
             #Pass the dictionary directly (no **kwargs!)
             self.plot_data_fit(param_set=new_params)
+            print(new_params)
         interact(wrapper, **relative_sliders)
 
     def manipulator_simplex_wpm(self, variation, step):
@@ -488,7 +492,7 @@ class ComplexFitter:
     @staticmethod
     def vg(f):
         """
-        Group velocity of magnetostatic surface waves in YIG (n=0)
+        Group velocity (m/s) of magnetostatic surface waves in YIG (n=0), as function of frequency in Hz
         """
         mu_o = 4*np.pi*1e-7
         t = 105*1e-9  # m
