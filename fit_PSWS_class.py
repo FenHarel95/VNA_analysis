@@ -42,13 +42,15 @@ DEFAULT_UNITS_2 = {
 LOWER_BOUNDS = {"A":1e-1, "w":0.005, "fres":0.1, "fper":0.001, "fref":0.1, "phi":0, "D":0.1*1e-6, "re0":-10, "im0":-10}
 UPPER_BOUNDS = {"A":np.inf, "w":2, "fres":50, "fper":1, "fref":50, "phi":2*np.pi, "D":1000*1e-6, "re0":10, "im0":10}
 LOWER_BOUNDS_2 = {
-            "A1":1e-1, "w1":0.005, "fres1":0.1, "fper1":0.001, "fref1":0.1, "D1":0.1*1e-6,
-            "A2":1e-1, "w2":0.05, "fres2":0.1, "fper2":0.001, "fref2":0.1, "phi1":0, "phi2":0, "D2":0.1*1e-6,
+            "A1":1e-1, "w1":0.005, "fres1":0.1, "fper1":0.001, "fref1":0.1, "phi1":0, "D1":0.1*1e-6,
+            "A2":1e-1, "w2":0.05, "fres2":0.1, "fper2":0.001, "fref2":0.1, "phi2":0, "D2":0.1*1e-6,
+            "A3":1e-1, "w3":0.05, "fres3":0.1, "fper3":0.001, "fref3":0.1, "phi3":0, "D3":0.1*1e-6,
             "re0":-10, "im0":-10
         }
 UPPER_BOUNDS_2 = {
-            "A1":np.inf, "w1":2, "fres1":50, "fper1":1, "fref1":50, "D1":1000*1e-6,
-            "A2":np.inf, "w2":2, "fres2":50, "fper2":1, "fref2":50, "phi1":2*np.pi, "phi2":2*np.pi, "D2":1000*1e-6,
+            "A1":np.inf, "w1":2, "fres1":50, "fper1":1, "fref1":50, "phi1":2*np.pi, "D1":1000*1e-6,
+            "A2":np.inf, "w2":2, "fres2":50, "fper2":1, "fref2":50, "phi2":2*np.pi, "D2":1000*1e-6,
+            "A3":np.inf, "w3":2, "fres3":50, "fper3":1, "fref3":50, "phi3":2*np.pi, "D3":1000*1e-6,
             "re0":10, "im0":10
         }
 #########################
@@ -141,6 +143,29 @@ class TwoComplexGaussianSimple(BaseComplexModel):
              ComplexGaussianSimple.model(f, A2, w2, fres2, fper2, phi2, re0, im0))
         return z
 
+class ThreeComplexGaussianSimple(BaseComplexModel):
+    def __init__(self):
+        param_names = ["A1", "w1", "fres1", "fper1", "phi1",
+                       "A2", "w2", "fres2", "fper2", "phi2",
+                       "A3", "w3", "fres3", "fper3", "phi3", "re0", "im0"]
+        super().__init__(param_names)
+        self.units = DEFAULT_UNITS_2
+        self.lower_bounds = LOWER_BOUNDS_2
+        self.upper_bounds = UPPER_BOUNDS_2
+
+    @staticmethod
+    def model(f, A1, w1, fres1, fper1, phi1,
+                    A2, w2, fres2, fper2, phi2,
+              A3, w3, fres3, fper3, phi3, re0, im0):
+        """
+        Sum of 3 complex Gaussians
+        """
+        z = (ComplexGaussianSimple.model(f, A1, w1, fres1, fper1, phi1, 0, 0) +
+             ComplexGaussianSimple.model(f, A2, w2, fres2, fper2, phi2, 0,0) +
+             ComplexGaussianSimple.model(f, A3, w3, fres3, fper3, phi3, re0, im0)
+             )
+        return z
+
 class ComplexGaussianVG(BaseComplexModel):
     def __init__(self):
         param_names = ["A", "w", "fres", "D", "fref", "re0", "im0"]
@@ -206,6 +231,8 @@ class ComplexFitter:
         self.result_simplex_wpm={} # fitted parameter results using simplex
         self.result = []       # fitted parameter results
         self.cov = None        # covariance matrix
+
+        self.manip_parameters = {} #Stores parameters changed by param_manipulator()
 
     #####################
     # Fixing parameters
@@ -451,6 +478,7 @@ class ComplexFitter:
          variation (max. percentage of deviation from original value) and step (steps for manipulation)
         """
         relative_sliders = {}
+        self.manip_parameters={} #reset parameters
 
         for name in param_set:
             relative_sliders[name] = widgets.FloatSlider(
@@ -475,16 +503,17 @@ class ComplexFitter:
 
             #Pass the dictionary directly (no **kwargs!)
             self.plot_data_fit(param_set=new_params)
-            print(new_params)
+            self.manip_parameters = new_params
         interact(wrapper, **relative_sliders)
+        return self.manip_parameters
 
     def manipulator_simplex_wpm(self, variation, step):
         """Manipulator for the results of simplex_wpm()"""
-        self.param_manipulator(variation, step, self.result_simplex_wpm)
+        return self.param_manipulator(variation, step, self.result_simplex_wpm)
 
     def manipulator_fit(self, variation, step):
         """Manipulator for the results of simplex_wpm()"""
-        self.param_manipulator(variation, step, self.result)
+        return self.param_manipulator(variation, step, self.result)
 
     #####################
     # Example vg function for DE spin waves
