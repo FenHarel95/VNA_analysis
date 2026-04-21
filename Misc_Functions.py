@@ -1,7 +1,10 @@
 import csv
-from additional_tools.Susceptibility_Methods import *
+
+import numpy as np
+#from additional_tools.Susceptibility_Methods import *
 import matplotlib.pyplot as plt
 import os
+from Susceptibility_Methods import *
 
 def sort_re_im(values):
     return {
@@ -35,35 +38,83 @@ def obtain_s_matrix(vna_channel, dictionary):
         s_temp[dictionary[trace]] = create_complex_array(data)
     return s_temp
 
-def ite_reflexion_p(s11, s22, s12, s21):
-    lenght = len(s11)
-    temp_ref = np.zeros(lenght, dtype=np.complex128)
-    temp_p = np.zeros(lenght, dtype=np.complex128)
-    for i in range( lenght ):
-        temp_ref[i], temp_p[i] = reflexion_p( s11[i], s22[i], s12[i], s21[i] )
+def ite_reflexion_p(s11, s22, s12, s21, deem=False, deem_phase=1):
+    """Calculates the reflexion and p propagation constant of the shape=(j=fieldPoints, i=freqPoints) from of arrays
+    sij of same shape"""
+    reflexion = np.zeros(len(s11[:,0]))
+    p = np.zeros(len(s11[:,0]))
 
-    return temp_ref, temp_p
+    for j in range( len(s11[:,0]) ): #iterates the fields
+        lenght = len(s11[0,:])
+        temp_reflex = np.zeros(lenght, dtype=np.complex128)
+        temp_p = np.zeros(lenght, dtype=np.complex128)
+        for i in range( lenght ):  #iterates the frequencies
+            temp_reflex[i], temp_p[i] = reflexion_p( s11[j,i], s22[j,i], s12[j,i], s21[j,i], deem, deem_phase )
+        print(temp_reflex)
+        #reflexion = np.append(reflexion, temp_reflex)
+        reflexion[j] = temp_reflex
+        #p = np.append(p, temp_p)
+        p[j] = temp_p
+
+    return reflexion , p
 
 def ite_permitt_permeab(sample_l, ref, p, freq, epsilon):
-    lenght = len(ref)
-    temp_permitt = np.zeros(lenght, dtype=np.complex128)
-    temp_permea_1 = np.zeros(lenght, dtype=np.complex128)
-    temp_permea_2 = np.zeros(lenght, dtype=np.complex128)
-    for i in range( lenght ):
-        if not isinstance(freq, (np.ndarray, list)):
-            calc = permitt_permeab(sample_l, ref[i], p[i], freq, epsaverage=epsilon)
-        else:
-            calc = permitt_permeab( sample_l, ref[i], p[i], freq[i], epsaverage=epsilon )
-        temp_permitt[i] = calc["permitt"]
-        temp_permea_1[i] = calc["first_eval_permeab"]
-        temp_permea_2[i] = calc["second_eval_permeab"]
+    """Returns the effective permitivity (permitt), permeability (permea_1, permea_2) of the
+    shape=(j=fieldPoints, i=freqPoints), from arrays ref, p of the same shape."""
+    permitt = np.array([])
+    permea_1 = np.array([])
+    permea_2 = np.array([])
 
-    return temp_permitt, temp_permea_1, temp_permea_2
+    for j in range(len(ref[:,0])): #iterates the fields
+        lenght = len(ref[0,:])
+        temp_permitt = np.zeros(lenght, dtype=np.complex128)
+        temp_permea_1 = np.zeros(lenght, dtype=np.complex128)
+        temp_permea_2 = np.zeros(lenght, dtype=np.complex128)
+        for i in range( lenght ): #iterates the fields
+            if not isinstance(freq[i], (np.ndarray, list)):
+                calc = permitt_permeab(sample_l, ref[j,i], p[j,i], freq[i], epsilon)
+            else:
+                calc = permitt_permeab( sample_l, ref[j,i], p[j,i], freq[i], epsilon )
+            temp_permitt[i] = calc["permitt"]
+            temp_permea_1[i] = calc["first_eval_permeab"]
+            temp_permea_2[i] = calc["second_eval_permeab"]
+
+        permitt = np.append(permitt, temp_permitt)
+        permea_1 = np.append(permea_1 , temp_permea_1)
+        permea_2 = np.append(permea_2 , temp_permea_2)
+
+    return {
+        "permittivity" : permitt,
+        "first_eval_permeab" : permea_1,
+        "second_eval_permeab" : permea_2
+    }
 
 def convert_dbm(value: str) -> str:
     if value.startswith('-'):
         value = 'm' + value[1:]  # Replace '-' with 'm'
     return value.replace('.', 'p')  # Replace '.' with 'p'
+
+def delta_mij(single, mij, mij_ref):
+    """Substract background from a spectra mij (np.array, eg. S21) depending on single choise
+    If single= True, it substracts Mij_ref
+    otherwise substracts background using SVD background removal
+    """
+    if single:
+        mij_ref_I = mij_ref.imag
+        mij_ref_R = mij_ref.real
+    else:
+        # Background components method
+        U, S, Vt = np.linalg.svd(mij, full_matrices=False)
+        mij_bg = np.outer(U[:, 0] * S[0], Vt[0, :])  # background = first component
+        mij = mij - mij_bg
+        # Median Background method(gives points with spikes)
+        # Z_fieldmedians = medfilt2d(Z, kernel_size=(3, 7))
+        # Z_fieldmedians = np.median(Z, axis=0)
+        # Z = Z-Z_fieldmedians
+        mij_ref_I = np.zeros(len(mij[0]), dtype=complex)
+        mij_ref_R = np.zeros(len(mij[0]), dtype=complex)
+
+    return mij, mij_ref_R, mij_ref_I
 
 class ExportData:
     def __init__(self, def_quantity, def_units:str, filename:str, directory='.', check=True):
