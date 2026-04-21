@@ -41,52 +41,48 @@ def obtain_s_matrix(vna_channel, dictionary):
 def ite_reflexion_p(s11, s22, s12, s21, deem=False, deem_phase=1):
     """Calculates the reflexion and p propagation constant of the shape=(j=fieldPoints, i=freqPoints) from of arrays
     sij of same shape"""
-    reflexion = np.zeros(len(s11[:,0]))
-    p = np.zeros(len(s11[:,0]))
+    n_fields = s11.shape[0]
+    n_freqs  = s11.shape[1]
 
-    for j in range( len(s11[:,0]) ): #iterates the fields
-        lenght = len(s11[0,:])
-        temp_reflex = np.zeros(lenght, dtype=np.complex128)
-        temp_p = np.zeros(lenght, dtype=np.complex128)
-        for i in range( lenght ):  #iterates the frequencies
-            temp_reflex[i], temp_p[i] = reflexion_p( s11[j,i], s22[j,i], s12[j,i], s21[j,i], deem, deem_phase )
-        print(temp_reflex)
-        #reflexion = np.append(reflexion, temp_reflex)
-        reflexion[j] = temp_reflex
-        #p = np.append(p, temp_p)
-        p[j] = temp_p
+    reflexion = np.zeros((n_fields, n_freqs), dtype=np.complex128)
+    p         = np.zeros((n_fields, n_freqs), dtype=np.complex128)
 
-    return reflexion , p
+    for j in range(n_fields):
+        for i in range(n_freqs):
+            reflexion[j, i], p[j, i] = reflexion_p(
+                s11[j, i], s22[j, i], s12[j, i], s21[j, i],
+                deem, deem_phase
+            )
+
+    return reflexion, p
 
 def ite_permitt_permeab(sample_l, ref, p, freq, epsilon):
     """Returns the effective permitivity (permitt), permeability (permea_1, permea_2) of the
     shape=(j=fieldPoints, i=freqPoints), from arrays ref, p of the same shape."""
-    permitt = np.array([])
-    permea_1 = np.array([])
-    permea_2 = np.array([])
+    n_fields, n_freqs = ref.shape
 
-    for j in range(len(ref[:,0])): #iterates the fields
-        lenght = len(ref[0,:])
-        temp_permitt = np.zeros(lenght, dtype=np.complex128)
-        temp_permea_1 = np.zeros(lenght, dtype=np.complex128)
-        temp_permea_2 = np.zeros(lenght, dtype=np.complex128)
-        for i in range( lenght ): #iterates the fields
-            if not isinstance(freq[i], (np.ndarray, list)):
-                calc = permitt_permeab(sample_l, ref[j,i], p[j,i], freq[i], epsilon)
-            else:
-                calc = permitt_permeab( sample_l, ref[j,i], p[j,i], freq[i], epsilon )
-            temp_permitt[i] = calc["permitt"]
-            temp_permea_1[i] = calc["first_eval_permeab"]
-            temp_permea_2[i] = calc["second_eval_permeab"]
+    permitt = np.zeros((n_fields, n_freqs), dtype=np.complex128)
+    permea_1 = np.zeros((n_fields, n_freqs), dtype=np.complex128)
+    permea_2 = np.zeros((n_fields, n_freqs), dtype=np.complex128)
 
-        permitt = np.append(permitt, temp_permitt)
-        permea_1 = np.append(permea_1 , temp_permea_1)
-        permea_2 = np.append(permea_2 , temp_permea_2)
+    for j in range(n_fields):
+        for i in range(n_freqs):
+            calc = permitt_permeab(
+                sample_l,
+                ref[j, i],
+                p[j, i],
+                freq[i],
+                epsilon
+            )
+
+            permitt[j, i] = calc["permitt"]
+            permea_1[j, i] = calc["first_eval_permeab"]
+            permea_2[j, i] = calc["second_eval_permeab"]
 
     return {
-        "permittivity" : permitt,
-        "first_eval_permeab" : permea_1,
-        "second_eval_permeab" : permea_2
+        "permittivity": permitt,
+        "first_eval_permeab": permea_1,
+        "second_eval_permeab": permea_2
     }
 
 def convert_dbm(value: str) -> str:
@@ -114,7 +110,10 @@ def delta_mij(single, mij, mij_ref):
         mij_ref_I = np.zeros(len(mij[0]), dtype=complex)
         mij_ref_R = np.zeros(len(mij[0]), dtype=complex)
 
-    return mij, mij_ref_R, mij_ref_I
+    mij_R = mij.real-mij_ref_R
+    mij_I = mij.imag - mij_ref_I
+
+    return mij_R, mij_I
 
 class ExportData:
     def __init__(self, def_quantity, def_units:str, filename:str, directory='.', check=True):
