@@ -1,10 +1,6 @@
 import numpy as np
 
-c = 299_792_458 # in meters per second (m/s)
-
-def delta_chi(mu_meas, mu_ref):
-    return mu_meas-mu_ref
-
+c0 = 299_792_458 # in meters per second (m/s)
 
 def reflexion_p(s11_m, s21_m, s12_m, s22_m, deem=False, deem_phase=1):
     # This model (Bilzer_2007_Thesis) assumes a reciprocal network. So we use S12=S21= (S12_m+S21_m)/2
@@ -55,7 +51,7 @@ def permitt_permeab(
     gamma = -np.log(prop_amp) / ls - 1j * (prop_phase / ls)
 
     # Gamma_fs calculation
-    gamma_fs = 0 + 1j * (2 * np.pi * frequency*1e9 / c)
+    gamma_fs = 0 + 1j * (2 * np.pi * frequency*1e9 / c0)
 
     # Gamma / Gamma_fs
     gamma_ratio = gamma / gamma_fs
