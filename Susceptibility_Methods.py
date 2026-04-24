@@ -22,7 +22,7 @@ def reflexion_p(s11_m, s21_m, s12_m, s22_m, deem=False, deem_phase=1):
 
     # Calculate reflexion parameter
     reflexion_1 = k + np.sqrt(k*k-1)
-    reflexion_2 = k - np.sqrt(k * k - 1)
+    reflexion_2 = k - np.sqrt(k*k-1)
 
     if np.abs(reflexion_1)<1:
         reflexion = reflexion_1
@@ -68,7 +68,7 @@ def permitt_permeab(
     permitt = gamma_ratio * ratio_2 * g
     first_eval_permeab = gamma_ratio * ratio_1 * (1/g)
 
-    gamma_squared = gamma_ratio ** 2
+    gamma_squared = gamma_ratio*gamma_ratio
     second_eval_permeab = gamma_squared / epsaverage
 
     # Return results
