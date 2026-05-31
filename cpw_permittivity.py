@@ -39,10 +39,12 @@ warnings.filterwarnings("ignore")
 # =============================================================================
 
 # Directory containing all .s2p files
-DATA_DIR = Path(".")          # ← change to your folder, e.g. Path("/home/user/data")
+DATA_DIR = Path(r"C:\Users\jose1\OneDrive\PostDoc_FZU\DATA\joseS\Permitivity_extraction")
+# ← change to your folder, e.g. Path("/home/user/data")
 
 # Output directory for HTML plots and CSV
-OUTPUT_DIR = Path(".")        # ← change as needed
+OUTPUT_DIR = Path(r"C:\Users\jose1\OneDrive\PostDoc_FZU\DATA\joseS\Permitivity_extraction\Results")
+# ← change as needed
 
 # =============================================================================
 # SECTION 2 — CPW GEOMETRY  (edit once, applies to all measurements)
@@ -54,8 +56,8 @@ MIL = 0.0254          # 1 mil in mm
 W    = 16.5 * MIL     # signal strip width
 G    = 5.0  * MIL     # slot (gap) width
 T_CU = 0.7  * MIL     # copper conductor thickness  = base air gap in slot
-H_RO = 8.0  * MIL     # RO4003 substrate thickness
-EPS_RO = 3.55         # RO4003 dielectric constant
+H_RO = 10.0  * MIL     #  Isola Astra MT77 substrate thickness
+EPS_RO = 3.0         #  Isola Astra MT77 dielectric constant
 
 # Structure: Conductor-Backed CPW (CBCPW)
 #   back copper ground plane present → substrate = RO4003 only, FR4 irrelevant
@@ -102,14 +104,14 @@ REGISTRY = {
     },
 
     # ── GGG long (5.7 mm), ε = 12.0 ──────────────────────────────────────
-    "GGG_long_Pressed_onSgMNMSA_300526": {
+    "GGG_large_Pressed_onSgMNMSA_300526": {
         "material":   "GGG",
         "h_mm":       0.5,
         "L_mm":       5.7,
         "eps_known":  12.0,
         "is_pressed": True,
     },
-    "GGG_long_onSgMNMSA_300526": {
+    "GGG_large_onSgMNMSA_300526": {
         "material":   "GGG",
         "h_mm":       0.5,
         "L_mm":       5.7,
@@ -135,14 +137,14 @@ REGISTRY = {
 
     # ── Hematite, serial SN1, thickness 0.2 mm ───────────────────────────
     # Replace SN1 with the actual serial number in the filename
-    "Fe2O3_SN1_Pressed_onSgMNMSA_300526": {
+    "ml20240308b2_Pressed_onSgMNMSA_300526": {
         "material":   "Hematite",
         "h_mm":       0.2,
         "L_mm":       5.0,
         "eps_known":  None,
         "is_pressed": True,
     },
-    "Fe2O3_SN1_onSgMNMSA_300526": {
+    "ml20240308b2_onSgMNMSA_300526": {
         "material":   "Hematite",
         "h_mm":       0.2,
         "L_mm":       5.0,
@@ -152,14 +154,14 @@ REGISTRY = {
 
     # ── Hematite, serial SN2, thickness 0.5 mm ───────────────────────────
     # Replace SN2 with the actual serial number in the filename
-    "Fe2O3_SN2_Pressed_onSgMNMSA_300526": {
+    "Fe2O3_14023080525_Pressed_onSgMNMSA_300526": {
         "material":   "Hematite",
         "h_mm":       0.5,
         "L_mm":       5.0,
         "eps_known":  None,
         "is_pressed": True,
     },
-    "Fe2O3_SN2_onSgMNMSA_300526": {
+    "Fe2O3_14023080525_onSgMNMSA_300526": {
         "material":   "Hematite",
         "h_mm":       0.5,
         "L_mm":       5.0,
@@ -167,6 +169,20 @@ REGISTRY = {
         "is_pressed": False,
     },
 }
+
+# Map registry stems to internal result keys
+# Adjust these keys if your filename stems differ from the defaults in REGISTRY
+STEM_TO_KEY = {
+    "GGG_large_Pressed_onSgMNMSA_300526":   "GGG_long_pressed",
+    "GGG_large_onSgMNMSA_300526":           "GGG_long_free",
+    "GGG_short_Pressed_onSgMNMSA_300526":  "GGG_short_pressed",
+    "GGG_short_onSgMNMSA_300526":          "GGG_short_free",
+    "ml20240308b2_Pressed_onSgMNMSA_300526":  "Hem_t02_pressed",
+    "ml20240308b2_onSgMNMSA_300526":          "Hem_t02_free",
+    "Fe2O3_14023080525_Pressed_onSgMNMSA_300526":  "Hem_t05_pressed",
+    "Fe2O3_14023080525_onSgMNMSA_300526":          "Hem_t05_free",
+}
+BARE_STEM = "SgMNMSA_300526"
 
 # =============================================================================
 # SECTION 4 — FILLING FACTORS
@@ -621,7 +637,7 @@ def plot_epsilon(results: dict, save_path: Path) -> None:
                                       res["eps_true_lower"][::-1]]),
                     fill="toself",
                     fillcolor=color.replace(")", ",0.10)").replace("rgb", "rgba")
-                              if color.startswith("rgb") else color + "1a",
+                              if color.startswith("rgb") else color,
                     line=dict(width=0),
                     legendgroup=key, showlegend=False,
                     hoverinfo="skip",
@@ -772,20 +788,6 @@ def export_csv(results: dict, save_path: Path) -> None:
 # =============================================================================
 # SECTION 10 — ENTRY POINT
 # =============================================================================
-
-# Map registry stems to internal result keys
-# Adjust these keys if your filename stems differ from the defaults in REGISTRY
-STEM_TO_KEY = {
-    "GGG_long_Pressed_onSgMNMSA_300526":   "GGG_long_pressed",
-    "GGG_long_onSgMNMSA_300526":           "GGG_long_free",
-    "GGG_short_Pressed_onSgMNMSA_300526":  "GGG_short_pressed",
-    "GGG_short_onSgMNMSA_300526":          "GGG_short_free",
-    "Fe2O3_SN1_Pressed_onSgMNMSA_300526":  "Hem_t02_pressed",
-    "Fe2O3_SN1_onSgMNMSA_300526":          "Hem_t02_free",
-    "Fe2O3_SN2_Pressed_onSgMNMSA_300526":  "Hem_t05_pressed",
-    "Fe2O3_SN2_onSgMNMSA_300526":          "Hem_t05_free",
-}
-BARE_STEM = "SgMNMSA_300526"
 
 
 def main() -> None:
