@@ -95,7 +95,7 @@ C_LIGHT = 3e8
 REGISTRY = {
 
     # ── Bare CPW reference ────────────────────────────────────────────────
-    "SgMNMSA_300526": {
+    "SgMNMSA_010626": {
         "material":   "bare",
         "h_mm":       None,
         "L_mm":       None,
@@ -104,67 +104,67 @@ REGISTRY = {
     },
 
     # ── GGG long (5.7 mm), ε = 12.0 ──────────────────────────────────────
-    "GGG_large_Pressed_onSgMNMSA_300526": {
+    "GGG_large_Pressed_onSgMNMSA_010626": {
         "material":   "GGG",
         "h_mm":       0.5,
-        "L_mm":       5.7,
+        "L_mm":       5.7/2,
         "eps_known":  12.0,
         "is_pressed": True,
     },
-    "GGG_large_onSgMNMSA_300526": {
+    "GGG_large_onSgMNMSA_010626": {
         "material":   "GGG",
         "h_mm":       0.5,
-        "L_mm":       5.7,
+        "L_mm":       5.7/2,
         "eps_known":  12.0,
         "is_pressed": False,
     },
 
     # ── GGG short (3.725 mm), ε = 12.0 ───────────────────────────────────
-    "GGG_short_Pressed_onSgMNMSA_300526": {
+    "GGG_short_Pressed_onSgMNMSA_010626": {
         "material":   "GGG",
         "h_mm":       0.5,
-        "L_mm":       3.725,
+        "L_mm":       3.725/2,
         "eps_known":  12.0,
         "is_pressed": True,
     },
-    "GGG_short_onSgMNMSA_300526": {
+    "GGG_short_onSgMNMSA_010626": {
         "material":   "GGG",
         "h_mm":       0.5,
-        "L_mm":       3.725,
+        "L_mm":       3.725/2,
         "eps_known":  12.0,
         "is_pressed": False,
     },
 
     # ── Hematite, serial SN1, thickness 0.2 mm ───────────────────────────
     # Replace SN1 with the actual serial number in the filename
-    "ml20240308b2_Pressed_onSgMNMSA_300526": {
+    "ml20240308b2_Pressed_onSgMNMSA_010626": {
         "material":   "Hematite",
         "h_mm":       0.2,
-        "L_mm":       5.0,
+        "L_mm":       5.0/2,
         "eps_known":  None,
         "is_pressed": True,
     },
-    "ml20240308b2_onSgMNMSA_300526": {
+    "ml20240308b2_onSgMNMSA_010626": {
         "material":   "Hematite",
         "h_mm":       0.2,
-        "L_mm":       5.0,
+        "L_mm":       5.0/2,
         "eps_known":  None,
         "is_pressed": False,
     },
 
     # ── Hematite, serial SN2, thickness 0.5 mm ───────────────────────────
     # Replace SN2 with the actual serial number in the filename
-    "Fe2O3_14023080525_Pressed_onSgMNMSA_300526": {
+    "Fe2O3_14023080525_Pressed_onSgMNMSA_010626": {
         "material":   "Hematite",
         "h_mm":       0.5,
-        "L_mm":       5.0,
+        "L_mm":       5.0/2,
         "eps_known":  None,
         "is_pressed": True,
     },
-    "Fe2O3_14023080525_onSgMNMSA_300526": {
+    "Fe2O3_14023080525_onSgMNMSA_010626": {
         "material":   "Hematite",
         "h_mm":       0.5,
-        "L_mm":       5.0,
+        "L_mm":       5.0/2,
         "eps_known":  None,
         "is_pressed": False,
     },
@@ -173,16 +173,16 @@ REGISTRY = {
 # Map registry stems to internal result keys
 # Adjust these keys if your filename stems differ from the defaults in REGISTRY
 STEM_TO_KEY = {
-    "GGG_large_Pressed_onSgMNMSA_300526":   "GGG_long_pressed",
-    "GGG_large_onSgMNMSA_300526":           "GGG_long_free",
-    "GGG_short_Pressed_onSgMNMSA_300526":  "GGG_short_pressed",
-    "GGG_short_onSgMNMSA_300526":          "GGG_short_free",
-    "ml20240308b2_Pressed_onSgMNMSA_300526":  "Hem_t02_pressed",
-    "ml20240308b2_onSgMNMSA_300526":          "Hem_t02_free",
-    "Fe2O3_14023080525_Pressed_onSgMNMSA_300526":  "Hem_t05_pressed",
-    "Fe2O3_14023080525_onSgMNMSA_300526":          "Hem_t05_free",
+    "GGG_large_Pressed_onSgMNMSA_010626":   "GGG_long_pressed",
+    "GGG_large_onSgMNMSA_010626":           "GGG_long_free",
+    "GGG_short_Pressed_onSgMNMSA_010626":  "GGG_short_pressed",
+    "GGG_short_onSgMNMSA_010626":          "GGG_short_free",
+    "ml20240308b2_Pressed_onSgMNMSA_010626":  "Hem_t02_pressed",
+    "ml20240308b2_onSgMNMSA_010626":          "Hem_t02_free",
+    "Fe2O3_14023080525_Pressed_onSgMNMSA_010626":  "Hem_t05_pressed",
+    "Fe2O3_14023080525_onSgMNMSA_010626":          "Hem_t05_free",
 }
-BARE_STEM = "SgMNMSA_300526"
+BARE_STEM = "SgMNMSA_010626"
 
 # =============================================================================
 # SECTION 4 — FILLING FACTORS
