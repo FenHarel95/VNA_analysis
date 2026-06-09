@@ -13,19 +13,21 @@ class Analysis:
         self.file = address/file_name
         self.setup = setup
         self.geo = geo #Can be inP, outP
+        self.components = ["11R", "11I", "12R", "12I", "21R", "21I", "22R", "22I"]
         ### Custom variables according to setup
         if self.setup == "Konstanz_PSWS":
-            self.raw_add = "/data/PNA5225b "
+            self.rawS_add = "/data/PNA5225b "
             self.pow_add = "/data/PNA5225b power"
             self.frq_add = "/data/PNA5225b f"
             self.curr_add = "/data/magnet current easyd"
         if self.setup == "FZU_FMR":
-            self.raw_add = ""
-            self.pow_add = ""
-            self.frq_add = ""
-            self.curr_add = ""
+            self.rawS_add = ""
+            self.pow_add = "/data/VNA power" #dBm
+            self.frq_add = "/data/VNA frequency" #Hz
+            self.curr_add = "/data/magnet current" #A
+            self.field_add = "/data/magnet field" #T
         if self.setup == "CHAOS":
-            self.raw_add = "/data/PNA5225b "
+            self.rawS_add = "/data/PNA5225b "
             self.pow_add = "/data/PNA5225b power"
             self.frq_add = "/data/PNA5225b f"
             self.field_add = ""
@@ -54,8 +56,15 @@ class Analysis:
             array = f[add + f"{typ}{target}"][:]
         return array
 
-    def rawS(self, target):
-        """Return the raw S matrix"""
+    def get_ij_indx(self, typ, target, indx, add):
+        """typ: S, Z, dL, etc. Target: ij. indx (normally field) to extract, add: generic address to find them in h5 file"""
+        with h5py.File(self.file, "r") as f:
+            #NumPy arrays
+            array = f[add + f"{typ}{target}"][indx,]
+        return array
+
+    def rawS_component(self, target):
+        """Return the target part of raw S matrix"""
         array = self.get_ij("S", target, self.raw_add)
         return array
 
@@ -151,40 +160,120 @@ class Analysis:
         if plot:
             fig.show()
 
-    def dic_ij(self, typ, add):
+
+    def dic_typ(self, typ, add):
         """Returns a dictionary with the ij matrix of choise:typ from the addres:add"""
-        names = ["11R", "11I", "12R", "12I", "21R", "21I", "22R", "22I"]
-        data_dict = {name: self.get_ij(typ, name, add) for name in names}
+        data_dict = {(typ+name): self.get_ij(typ, name, add) for name in self.components}
         data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
         return data_dict
+
+    def dic_typ_indx(self, typ, indx, add):
+        """Returns a dictionary with the ij matrix of choise:typ from the addres:add"""
+        data_dict = {(typ+name): self.get_ij_indx(typ, name, indx, add) for name in self.components}
+        data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
+        return data_dict
+
+    def delta_dic_typ(self, typ1, add1, typ2, add2, sign=-1):
+        """Returns a dictionary with the ij matrix of choise:typ from the addres:add"""
+        data_dict = {(typ1+name): (self.get_ij(typ1, name, add1) + sign*self.get_ij(typ2, name, add2) ) for name in self.components}
+        data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
+        return data_dict
+
+    def subtract_background_ij(self, typ, target, add, single, ref_indx, ref_add, sign=-1):
+        initial = self.get_ij(typ, target, add)
+        if single:
+            background = self.get_ij_indx(typ, target, ref_indx, ref_add)
+        else:
+            # Background components method
+            U, S, Vt = np.linalg.svd(initial, full_matrices=False)
+            background = np.outer(U[:, 0] * S[0], Vt[0, :])  # background = first component
+            #initial = initial + sign*background
+            #background = np.zeros(len(initial[0]), dtype=complex)
+
+        final = initial + sign*background
+        return final, background #final has a shape [field,freqs], background [freqs]
+
+    def subtract_background_typ(self, typ, add, single, ref_indx, ref_add, sign=-1):
+        data_dict = {}
+        backg_dict = {}
+        for name in self.components:
+            data, backg = self.subtract_background_ij(typ, name, add, single, ref_indx, ref_add, sign)
+            data_dict[typ+name] = data
+            backg_dict[typ+name] = backg
+        data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
+        backg_dict = {k: v.astype(np.float32) for k, v in backg_dict.items()} # ensuring compressed data to 4 bits
+        return data_dict, backg_dict
 
     def plot_rawSij_plotly(self, idx, low_x, high_x, save=True, plot=True):
         """Plots the raw S matrix"""
         typ = "S"
-        self.plot_ij_plotly(self.dic_ij(typ, self.raw_add), idx, typ, low_x, high_x, "",save, plot)
+        self.plot_ij_plotly(self.dic_typ(typ, self.rawS_add), idx, typ, low_x, high_x, "",save, plot)
 
-class Analysis_PSWS(Analysis):
-    """ Main class that handles analysis of PSWS spectroscopy data.
+    def write_ij_component(self, dataArray, address, key):
+        with h5py.File(self.file, "a") as f:  # Open in append mode
+            add = address + key
+            if (add) in f:
+                del f[add]  # Delete if it exists
+            f.create_dataset(add, data=dataArray, compression="gzip", compression_opts=9)
+        #print("Set saved in HDF5 file.")
+
+class Analysis_FMR(Analysis):
+    """ Main class that handles analysis of FMR spectroscopy data.
     """
-    def __init__(self, address , file_name:str, sample:str , setup:str, geo:str, device: str, **kwargs):
+
+    def __init__(self, address, file_name: str, sample: str, setup: str, geo: str, pre_ref:str, **kwargs):
         super().__init__(address, file_name, sample, setup, geo, **kwargs)
-        self.sample = sample + "_" + device
-        self.data_add = "/calc/"
-        with h5py.File(self.file, "r") as f:
-            self.ref_idx = f["/info/Ref_idx"][()]  # [()] reads the scalar value
-        if self.ref_idx == -1:
-            self.ref = False
+        self.sample = sample + "_" + geo
+        self.pre_ref = pre_ref #Reference is already subtracted from data.This normally is the case up to 08/06/2026.
+
+        self.calc_data_add = "/calc/ d_"
+        self.new_ref_add = "/calc/ref_"
+        self.ref_indx = None
+
+        if self.pre_ref:
+            self.ref_add = "/data/VNA ref_"
+            self.data_add = "/data/VNA d_"
+            self.rawS_add = "/calc/raw_"
+
+            rawS_dict = self.rawS() # calculate the raw data
+            for key in rawS_dict:
+                self.write_ij_component(rawS_dict[key], self.rawS_add, key) # store it in the file
+
         else:
-            self.ref = True
+            self.rawS_add = "/data/VNA d_"
 
-    def dL(self, target):
-        """Return the dLij array"""
-        array = self.get_ij("dL", target, self.data_add)
-        return array
+    def subtract_ref(self, single, ref_indx= None):
+        """Calculates the raw data (files with subtraction) or the subtraction of ref. (files of raw data)"""
+        #if single: ########This block should not be here, because it is not real when single=False
+        #
+        #    ref_dict = self.dic_typ_indx("S", ref_indx, self.raw_add)
+        #    for key in ref_dict:
+        #        self.write_ij_component(ref_dict[key], self.ref_add, key)
+        self.ref_indx = ref_indx
+        deltaS_dict, backg_dict = self.subtract_background_typ("S",
+                                     self.rawS_add, single, self.ref_indx, self.ref_add, sign=-1)
+        for key in deltaS_dict:
+            self.write_ij_component(deltaS_dict[key], self.calc_data_add, key)
+        for key in backg_dict:
+            self.write_ij_component(backg_dict[key], self.new_ref_add, key)
 
+
+    def rawS(self):
+        """Return the raw S matrix"""
+        if self.pre_ref:
+            dict, back = self.subtract_background_typ("S",
+                                                       self.data_add, True, 0,  self.ref_add, sign=1)
+        else:
+            dict = self.dic_typ("S", self.raw_add)
+        return dict
+
+    ###############Check from here
     def dS(self, target):
-        """Return the dLij array"""
-        array = self.get_ij("dS", target, self.data_add)
+        """Return the dSij array"""
+        if self.ref:
+            array = self.get_ij("d_S", target, self.data_add)
+        else:
+            array = 0
         return array
 
     def plot_dij_plotly(self, typ, idx, low_x, high_x, save=True, plot=True):
@@ -206,8 +295,45 @@ class Analysis_PSWS(Analysis):
                  index=IntSlider(value=n_0, min=0, max=n_max, step=1, readout_format='.0f', description=r"Field index")
                  );
 
-class Analysis_FMR(Analysis):
+class Analysis_PSWS(Analysis):
     """ Main class that handles analysis of PSWS spectroscopy data.
     """
-    def __init__(self, address , file_name:str, sample:str , lab:str, **kwargs):
-        super().__init__(address, file_name, sample, lab, **kwargs)
+    def __init__(self, address , file_name:str, sample:str , setup:str, geo:str, device: str, **kwargs):
+        super().__init__(address, file_name, sample, setup, geo, **kwargs)
+        self.sample = sample + "_" + device
+        self.calc_data_add = "/calc/"
+        with h5py.File(self.file, "r") as f:
+            self.ref_idx = f["/info/Ref_idx"][()]  # [()] reads the scalar value
+        if self.ref_idx == -1:
+            self.ref = False
+        else:
+            self.ref = True
+
+    def dL(self, target):
+        """Return the dLij array"""
+        array = self.get_ij("dL", target, self.calc_data_add)
+        return array
+
+    def dS(self, target):
+        """Return the dLij array"""
+        array = self.get_ij("dS", target, self.calc_data_add)
+        return array
+
+    def plot_dij_plotly(self, typ, idx, low_x, high_x, save=True, plot=True):
+        """Plots the "typ"ij matrix for data stored in self.calc_data_add"""
+        if self.ref:
+            comment = f"_Refi_{self.ref_idx}"
+        else:
+            comment = "_MeanRef"
+        self.plot_ij_plotly(self.dic_ij(typ, self.calc_data_add), idx, typ, low_x, high_x, comment, save, plot)
+
+    def plot_dij_slider(self, typ, n_0):
+        n_max = (self.rawS("11R")).shape[0] - 1
+
+        # Interactive sliders
+        def plot_dij(index):
+            self.plot_dij_plotly(typ, index, self.freqs[0], np.max(self.freqs), save=False, plot=True)
+
+        interact(plot_dij,
+                 index=IntSlider(value=n_0, min=0, max=n_max, step=1, readout_format='.0f', description=r"Field index")
+                 );
