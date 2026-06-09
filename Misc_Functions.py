@@ -110,7 +110,7 @@ def delta_mij(single, mij, mij_ref):
         mij_ref_I = np.zeros(len(mij[0]), dtype=complex)
         mij_ref_R = np.zeros(len(mij[0]), dtype=complex)
 
-    mij_R = mij.real-mij_ref_R
+    mij_R = mij.real - mij_ref_R
     mij_I = mij.imag - mij_ref_I
 
     return mij_R, mij_I
