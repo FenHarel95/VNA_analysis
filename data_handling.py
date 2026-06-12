@@ -14,6 +14,12 @@ class Analysis:
         self.setup = setup
         self.geo = geo #Can be inP, outP
         self.components = ["11R", "11I", "12R", "12I", "21R", "21I", "22R", "22I"]
+        self.user_ref = False
+        #Addreses
+        self.calc_add = "/calc/"
+        self.raw_data_add = "/data/"
+        self.info_add = "/info/"
+
         ### Custom variables according to setup
         if self.setup == "Konstanz_PSWS":
             self.rawS_add = "/data/PNA5225b "
@@ -21,7 +27,7 @@ class Analysis:
             self.frq_add = "/data/PNA5225b f"
             self.curr_add = "/data/magnet current easyd"
         if self.setup == "FZU_FMR":
-            self.rawS_add = ""
+            self.rawS_add = "data/VNA "
             self.pow_add = "/data/VNA power" #dBm
             self.frq_add = "/data/VNA frequency" #Hz
             self.curr_add = "/data/magnet current" #A
@@ -46,7 +52,7 @@ class Analysis:
         """Target must be of the type ijR or ijI"""
         with h5py.File(self.file, "r") as f:
             #NumPy arrays
-            array = f[self.raw_add + f"S{target}"][:]
+            array = f[self.rawS_add + f"S{target}"][:]
         return array
 
     def get_ij(self, typ, target, add):
@@ -65,7 +71,7 @@ class Analysis:
 
     def rawS_component(self, target):
         """Return the target part of raw S matrix"""
-        array = self.get_ij("S", target, self.raw_add)
+        array = self.get_ij("S", target, self.rawS_add)
         return array
 
     def calc_mag(self, re, im):
@@ -81,16 +87,26 @@ class Analysis:
             field = 0.00776 + A * 0.02894 - A * A * 2.66123e-4 - A * A * A * 2.47495e-5 - A * A * A * A * 4.64487e-5
         if self.setup == "FZU_FMR":
             #Field for 20mmGap, from Manual (inPlane)
-            field1 = 0.01018 + 0.05859*A - 0.00118*(A**2) + 2.1658E-4*(A**3) - 1.77652E-5*(A**4) + 6.35589E-7*(A**5) 
-            -1.15951E-8*(A**6) + 1.06504E-10*(A**7) - 3.91644E-13*(A**8)
+            #field1 = 0.01018 + 0.05859*A - 0.00118*(A**2) + 2.1658E-4*(A**3) - 1.77652E-5*(A**4) + 6.35589E-7*(A**5)
+            #-1.15951E-8*(A**6) + 1.06504E-10*(A**7) - 3.91644E-13*(A**8)
             #Cal_12152025_Using_ml20240308b2_dS11_5dBm (inPlane)
-            field2 = 0.00675 + 0.05052*A + 6.69033E-4*(A**2) - 4.38998E-4*(A**3) + 1.11737E-4*(A**4) - 1.45078E-5*(A**5) 
-            + 1.00456E-6*(A**6) - 3.52383E-8*(A**7) + 4.88931E-10*(A**8)
+            #field2 = 0.00675 + 0.05052*A + 6.69033E-4*(A**2) - 4.38998E-4*(A**3) + 1.11737E-4*(A**4) - 1.45078E-5*(A**5)
+            #+ 1.00456E-6*(A**6) - 3.52383E-8*(A**7) + 4.88931E-10*(A**8)
+            # field_inP = (field1 + field2)/2
             #Cal_18122025_Using_ml20240308b2_dS11_0dBm (outPlane)
-            field_outP = (-4.75612131323894e-10*A**8 + 5.53240901595132e-8*A**7 - 2.44397032127303e-6*A**6 + 5.44573750852832e-5*A**5
-                          - 0.000670050456046096*A**4 + 0.00455904626621348*A**3 - 0.0156901329345105*A**2 + 0.0762165481027225*A + 0.0164075279665365)
-            
-            field_inP = (field1 + field2)/2
+            field_outP = (-4.75612131323894e-10*A**8 + 5.53240901595132e-8*A**7 - 2.44397032127303e-6*A**6 +
+                          5.44573750852832e-5*A**5 - 0.000670050456046096*A**4 + 0.00455904626621348*A**3 -
+                          0.0156901329345105*A**2 + 0.0762165481027225*A + 0.0164075279665365)
+
+            field_inP_mT = (-2.791826973437297e-12 * A ** 13 + 2.629557158787310e-10 * A ** 12 -
+                            3.341952544859737e-09 * A ** 11 - 5.932640840884606e-07 * A ** 10 +
+                            3.802178264636290e-05 * A ** 9 - 1.130650994442105e-03 * A ** 8 +
+                            1.996752774903699e-02 * A ** 7 - 2.220353889564056e-01 * A ** 6 +
+                            1.557372478377703e+00 * A ** 5 - 6.643370685736379e+00 * A ** 4 +
+                            1.587659937311382e+01 * A ** 3 - 1.851724704466135e+01 * A ** 2 +
+                            5.928607446113774e+01 * A + 6.050126767279399e+00)
+            field_inP = field_inP_mT / 1000  # T
+
             if inP:
                 field = field_inP
             else:
@@ -108,22 +124,22 @@ class Analysis:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=False, vertical_spacing=0.1)
 
         def get_lines(n):
-            m_11 = self.calc_mag(dic['11R'][n], dic['11I'][n])
-            m_12 = self.calc_mag(dic['12R'][n], dic['12I'][n])
-            m_21 = self.calc_mag(dic['21R'][n], dic['21I'][n])
-            m_22 = self.calc_mag(dic['22R'][n], dic['22I'][n])
+            m_11 = self.calc_mag(dic[typ+'11R'][n], dic[typ+'11I'][n])
+            m_12 = self.calc_mag(dic[typ+'12R'][n], dic[typ+'12I'][n])
+            m_21 = self.calc_mag(dic[typ+'21R'][n], dic[typ+'21I'][n])
+            m_22 = self.calc_mag(dic[typ+'22R'][n], dic[typ+'22I'][n])
             lines_o = [
-                {'y': dic['11R'][n], 'name': f'Re({typ}11)', 'color': 'blue', 'row': 1},
-                {'y': dic['11I'][n], 'name': f'Im({typ}11)', 'color': 'red', 'row': 1},
-                {'y': dic['22R'][n], 'name': f'Re({typ}22)', 'color': 'cyan', 'row': 1},
-                {'y': dic['22I'][n], 'name': f'Im({typ}22)', 'color': 'magenta', 'row': 1},
+                {'y': dic[typ+'11R'][n], 'name': f'Re({typ}11)', 'color': 'blue', 'row': 1},
+                {'y': dic[typ+'11I'][n], 'name': f'Im({typ}11)', 'color': 'red', 'row': 1},
+                {'y': dic[typ+'22R'][n], 'name': f'Re({typ}22)', 'color': 'cyan', 'row': 1},
+                {'y': dic[typ+'22I'][n], 'name': f'Im({typ}22)', 'color': 'magenta', 'row': 1},
                 {'y': m_11, 'name': f'Mag({typ}11)', 'color': 'orange', 'row': 1},
                 {'y': m_22, 'name': f'Mag({typ}22)', 'color': 'mediumpurple', 'row': 1},
 
-                {'y': dic['12R'][n], 'name': f'Re({typ}12)', 'color': 'blue', 'row': 2},
-                {'y': dic['12I'][n], 'name': f'Im({typ}12)', 'color': 'red', 'row': 2},
-                {'y': dic['21R'][n], 'name': f'Re({typ}21)', 'color': 'cyan', 'dash': 'dash', 'row': 2},
-                {'y': dic['21I'][n], 'name': f'Im({typ}21)', 'color': 'magenta', 'dash': 'dash', 'row': 2},
+                {'y': dic[typ+'12R'][n], 'name': f'Re({typ}12)', 'color': 'blue', 'row': 2},
+                {'y': dic[typ+'12I'][n], 'name': f'Im({typ}12)', 'color': 'red', 'row': 2},
+                {'y': dic[typ+'21R'][n], 'name': f'Re({typ}21)', 'color': 'cyan', 'dash': 'dash', 'row': 2},
+                {'y': dic[typ+'21I'][n], 'name': f'Im({typ}21)', 'color': 'magenta', 'dash': 'dash', 'row': 2},
                 {'y': m_12, 'name': f'Mag({typ}12)', 'color': 'orange', 'row': 2},
                 {'y': m_21, 'name': f'Mag({typ}21)', 'color': 'mediumpurple', 'dash': 'dash', 'row': 2}
             ]
@@ -179,10 +195,10 @@ class Analysis:
         data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
         return data_dict
 
-    def subtract_background_ij(self, typ, target, add, single, ref_indx, ref_add, sign=-1):
+    def subtract_background_ij(self, typ, target, add, single, ref_typ, ref_indx, ref_add, sign=-1):
         initial = self.get_ij(typ, target, add)
         if single:
-            background = self.get_ij_indx(typ, target, ref_indx, ref_add)
+            background = self.get_ij_indx(ref_typ, target, ref_indx, ref_add)
         else:
             # Background components method
             U, S, Vt = np.linalg.svd(initial, full_matrices=False)
@@ -197,9 +213,9 @@ class Analysis:
         data_dict = {}
         backg_dict = {}
         for name in self.components:
-            data, backg = self.subtract_background_ij(typ, name, add, single, ref_indx, ref_add, sign)
-            data_dict[typ+name] = data
-            backg_dict[typ+name] = backg
+            data, backg = self.subtract_background_ij(typ, name, add, single, typ, ref_indx, ref_add, sign)
+            data_dict["d_"+typ+name] = data
+            backg_dict["ref_"+typ+name] = backg
         data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
         backg_dict = {k: v.astype(np.float32) for k, v in backg_dict.items()} # ensuring compressed data to 4 bits
         return data_dict, backg_dict
@@ -217,30 +233,74 @@ class Analysis:
             f.create_dataset(add, data=dataArray, compression="gzip", compression_opts=9)
         #print("Set saved in HDF5 file.")
 
+    def store_ref_indx(self, ref_indx):
+        self.ref_indx_info = ref_indx
+        with h5py.File(self.file, "a") as f:
+            if ("/info/Ref_idx") in f:
+                del f["/info/Ref_idx"]  # Delete if it exists
+            f.create_dataset("/info/Ref_idx", data=self.ref_indx_info)
+
+
 class Analysis_FMR(Analysis):
     """ Main class that handles analysis of FMR spectroscopy data.
     """
 
-    def __init__(self, address, file_name: str, sample: str, setup: str, geo: str, pre_ref:str, **kwargs):
+    def __init__(self, address, file_name: str, sample: str, setup: str, geo: str, vna_ref:str, **kwargs):
         super().__init__(address, file_name, sample, setup, geo, **kwargs)
         self.sample = sample + "_" + geo
-        self.pre_ref = pre_ref #Reference is already subtracted from data.This normally is the case up to 08/06/2026.
-
-        self.calc_data_add = "/calc/ d_"
-        self.new_ref_add = "/calc/ref_"
+        self.vna_ref = vna_ref #Reference is already subtracted from data.This normally is the case up to 11/06/2026.
+        self.ref = False
         self.ref_indx = None
+        self.rawS_add = "/data/ "
 
-        if self.pre_ref:
-            self.ref_add = "/data/VNA ref_"
-            self.data_add = "/data/VNA d_"
-            self.rawS_add = "/calc/raw_"
+        if self.vna_ref:
+            self.ref = True
+            self.original_data_add = "/data/VNA "
+            self.original_ref_add = self.original_data_add
 
             rawS_dict = self.rawS() # calculate the raw data
+            original_dS_matrix = self.dic_typ("d_S", self.original_data_add) #Get the original dS
+            
             for key in rawS_dict:
                 self.write_ij_component(rawS_dict[key], self.rawS_add, key) # store it in the file
+                
+            for key in original_dS_matrix:
+                self.write_ij_component(original_dS_matrix[key], self.calc_add, key) # store it in the file
+            
+            
+            self.store_ref_indx("VNA ref")
+            self.ref_indx = None
 
         else:
-            self.rawS_add = "/data/VNA d_"
+            #self.rawS_add = "/data/VNA "
+            self.data_add = None
+
+    def read_ref_indx(self):
+        with h5py.File(self.file, "r") as f:
+            if "/info/Ref_idx" in f:
+                self.ref_indx_info = f["/info/Ref_idx"]
+            else:
+                self.ref_indx_info = None
+
+        return self.ref_indx_info
+
+    def rawS(self):
+        """Return the raw S matrix"""
+        if self.vna_ref:
+        #    dict, back = self.subtract_background_typ("d_S",
+        #                                               self.original_data_add, True, "ref_S",0,
+        #                                             self.original_ref_add, sign=1)
+            data_dict = {}
+            for name in self.components:
+                data, backg = self.subtract_background_ij("d_S", name, self.original_data_add, True,
+                                                          "ref_S", 0, self.original_ref_add, sign=1)
+                data_dict["S" + name] = data
+            data_dict = {k: v.astype(np.float32) for k, v in
+                         data_dict.items()}  # ensuring compressed data to 4 bits
+            return data_dict
+        else:
+            dict = self.dic_typ("S", self.rawS_add)
+        return dict
 
     def subtract_ref(self, single, ref_indx= None):
         """Calculates the raw data (files with subtraction) or the subtraction of ref. (files of raw data)"""
@@ -249,43 +309,45 @@ class Analysis_FMR(Analysis):
         #    ref_dict = self.dic_typ_indx("S", ref_indx, self.raw_add)
         #    for key in ref_dict:
         #        self.write_ij_component(ref_dict[key], self.ref_add, key)
-        self.ref_indx = ref_indx
-        deltaS_dict, backg_dict = self.subtract_background_typ("S",
-                                     self.rawS_add, single, self.ref_indx, self.ref_add, sign=-1)
-        for key in deltaS_dict:
-            self.write_ij_component(deltaS_dict[key], self.calc_data_add, key)
-        for key in backg_dict:
-            self.write_ij_component(backg_dict[key], self.new_ref_add, key)
-
-
-    def rawS(self):
-        """Return the raw S matrix"""
-        if self.pre_ref:
-            dict, back = self.subtract_background_typ("S",
-                                                       self.data_add, True, 0,  self.ref_add, sign=1)
+        self.ref = True
+        self.user_ref = True
+        if single:
+            self.ref_indx = ref_indx
+            self.store_ref_indx(self.ref_indx)
         else:
-            dict = self.dic_typ("S", self.raw_add)
-        return dict
+            self.ref_indx = None
+            self.store_ref_indx("AverageBackground")
+        deltaS_dict, backg_dict = self.subtract_background_typ("S",
+                                     self.rawS_add, single, self.ref_indx, self.rawS_add, sign=-1)
+        for key in deltaS_dict:
+            self.write_ij_component(deltaS_dict[key], self.calc_add, key)
+        for key in backg_dict:
+            self.write_ij_component(backg_dict[key], self.calc_add, key)
+
+    #def original_dS(self):
+    #    dict = self.dic_typ("dS", self.original_data_add)
+    #    return dict
 
     ###############Check from here
-    def dS(self, target):
-        """Return the dSij array"""
-        if self.ref:
-            array = self.get_ij("d_S", target, self.data_add)
-        else:
-            array = 0
-        return array
+    #def get_dS(self, target):
+    #    """Return the dSij array"""
+    #    if self.ref:
+    #        array = self.get_ij("d_S", target, self.calc_add)
+    #    else:
+    #        array = 0
+    #    return array
 
-    def plot_dij_plotly(self, typ, idx, low_x, high_x, save=True, plot=True):
-        """Plots the "typ"ij matrix for data stored in self.data_add"""
+    def plot_dij_plotly(self, typ, idx, low_x, high_x, save=False, plot=True):
+        """Plots the "typ"ij matrix for data stored in self.cal_add. e.g.: dSij matrix"""
+
         if self.ref:
-            comment = f"_Refi_{self.ref_idx}"
+            comment = f"Ref_index:{self.read_ref_indx()}"
+            self.plot_ij_plotly(self.dic_typ(typ, self.calc_add), idx, typ, low_x, high_x, comment, save, plot)
         else:
-            comment = "_MeanRef"
-        self.plot_ij_plotly(self.dic_ij(typ, self.data_add), idx, typ, low_x, high_x, comment, save, plot)
+            print("No ref. subtracted yet. Nothing to show.")
 
     def plot_dij_slider(self, typ, n_0):
-        n_max = (self.rawS("11R")).shape[0] - 1
+        n_max = (self.get_ij("S", "11R", self.rawS_add)).shape[0] - 1
 
         # Interactive sliders
         def plot_dij(index):
