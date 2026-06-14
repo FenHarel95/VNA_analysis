@@ -3,7 +3,7 @@ import numpy as np
 #Constants
 mu_0 = 4*np.pi*1e-7 #SI units
 
-def kalinikos(k, gamma, M_s, B_u, B_s, A, T, B_0, kind="SW", n=0):  # in GHz, Ms in A/m, B in T
+def kalinikos(B_0, k, gamma, M_s, B_u, B_s, A, T,  kind="SW", n=0):  # in GHz, Ms in A/m, B in T
     """Based on Olga Gladii_2016_thesis (https://theses.hal.science/tel-01724624v1/file/Gladii_Olga_2016_ED182.pdf)
     k (rad/m), is the wave vector
     gamma (rad/T), is the gyromagnetic ratio
@@ -46,7 +46,7 @@ def kalinikos(k, gamma, M_s, B_u, B_s, A, T, B_0, kind="SW", n=0):  # in GHz, Ms
         return k * 0
 
 
-def hematite_modes(gamma, H, k, HD, HK, Hex):
+def hematite_modes(H, gamma, k, HD, HK, Hex):
     """Based on supplementary of ElKanj2023 (https://www.science.org/doi/10.1126/sciadv.adh1601)"""
     # all fields in T, k in rad/m
     # frequencies in GHz
@@ -68,11 +68,11 @@ def hematite_modes(gamma, H, k, HD, HK, Hex):
     }
     return modes
 
-def paramagnetic_resonance(m, H, Ha):
+def paramagnetic_resonance( H, m, Ha):
     f = m * np.sqrt(H*H + Ha*Ha)
     return f
 
-def kittel_general(gamma, H, Hx, Hy):
+def kittel_general(H, gamma, Hx, Hy):
     """
     General FMR
     gamma (GHz/T)
@@ -81,7 +81,7 @@ def kittel_general(gamma, H, Hx, Hy):
     f = gamma*np.sqrt( (H+Hx)*(H+Hy) ) #GHz
     return f
 
-def kittel_cubic(gamma,H,Ms,Hc,Hu,Hs,A,T):
+def kittel_cubic(H,gamma,Ms,Hc,Hu,Hs,A,T):
     """
     FMR for films with cubic anisotropy.
     gamma (GHz/T), is the gyromagnetic ratio
