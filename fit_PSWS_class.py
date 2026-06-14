@@ -1,5 +1,5 @@
 import numpy as np
-
+from complex_fits import ComplexFitter
 
 #########################
 # Global default definitions
@@ -62,6 +62,7 @@ class BaseComplexModel:
         self.param_names = param_names
         # Units default for all models
         self.units = DEFAULT_UNITS.copy()
+
 
 #########################
 # Complex Gaussian Models
