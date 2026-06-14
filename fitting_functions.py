@@ -20,7 +20,19 @@ two_lower_bounds_vg = [0, 0.005, 0.1, 0.5*1e-6, 0.1, 0, 0.05, 0.1, 0.5*1e-6, 0.1
 two_upper_bounds_vg = [np.inf, 2, 50, 50*1e-6, 50, np.inf, 2, 50, 50*1e-6, 50, 10, 10]
 
 bounds=(lower_bounds, upper_bounds)
+
+#####################Constants
+pi = np.pi
+
 ####################Models
+def sym_lorentzian(x, xo, dx):
+    amplitude = dx/((x-xo)**2 + dx**2)
+    return amplitude
+
+def antisym_lorentzian(x, xo, dx):
+    amplitude = (x-xo)/((x-xo)**2 + dx**2)
+    return amplitude
+
 def complx_gaussian(f, A, w, fres, fper, fref, re0, im0):
     re = re0 + (A/(w*np.sqrt(np.pi/2)))*np.exp(-2*((f-fres)/w)*((f-fres)/w))*np.cos(2*np.pi*(f-fref)/fper)
     im = im0 + (A/(w*np.sqrt(np.pi/2)))*np.exp(-2*((f-fres)/w)*((f-fres)/w))*np.sin(2*np.pi*(f-fref)/fper)
