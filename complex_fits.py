@@ -265,6 +265,7 @@ class ComplexFitter:
 
         return export
 
+
     @staticmethod
     def unconcatenate(z):
         """
