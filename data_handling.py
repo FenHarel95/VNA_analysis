@@ -195,10 +195,40 @@ class Analysis:
         data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
         return data_dict
 
-    def subtract_background_ij(self, typ, target, add, single, ref_typ, ref_indx, ref_add, n_bg, sign=-1):
+    def subtract_background_ij(self, typ, target, add, single, fit, ref_typ, ref_indx, ref_add, n_bg, sign=-1):
         initial = self.get_ij(typ, target, add)
         if single:
-            background = self.get_ij_indx(ref_typ, target, ref_indx, ref_add)
+            if fit:
+                if single:
+
+                    ref = self.get_ij_indx(
+                        ref_typ,
+                        target,
+                        ref_indx,
+                        ref_add
+                    )
+
+                    x = (self.freqs - self.freqs.mean())
+                    x /= (self.freqs.max() - self.freqs.min())
+
+                    background = np.empty_like(initial)
+
+                    A = np.column_stack([
+                        ref,
+                        x * ref,
+                        x ** 2 * ref
+                    ])
+
+                    for i, trace in enumerate(initial):
+                        coef, *_ = np.linalg.lstsq(
+                            A,
+                            trace,
+                            rcond=None
+                        )
+
+                        background[i] = A @ coef
+            else:
+                background = self.get_ij_indx(ref_typ, target, ref_indx, ref_add)
         else:
             # Background components method
             U, S, Vt = np.linalg.svd(initial, full_matrices=False)
@@ -214,11 +244,11 @@ class Analysis:
         final = initial + sign*background
         return final, background #final has a shape [field,freqs], background [freqs]
 
-    def subtract_background_typ(self, typ, add, single, ref_indx, ref_add, n_bg, sign=-1):
+    def subtract_background_typ(self, typ, add, single, fit, ref_indx, ref_add, n_bg, sign=-1):
         data_dict = {}
         backg_dict = {}
         for name in self.components:
-            data, backg = self.subtract_background_ij(typ, name, add, single, typ, ref_indx, ref_add, n_bg, sign)
+            data, backg = self.subtract_background_ij(typ, name, add, single, fit, typ, ref_indx, ref_add, n_bg, sign)
             data_dict["d_"+typ+name] = data
             backg_dict["ref_"+typ+name] = backg
         data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
@@ -264,7 +294,7 @@ class Analysis_FMR(Analysis):
                 self.original_data_add = "/data/VNA "
                 self.original_ref_add = self.original_data_add
 
-                rawS_dict = self.rawS() # calculate the raw data
+                rawS_dict = self.calc_raw_S() # calculate the raw data
                 original_dS_matrix = self.dic_typ("d_S", self.original_data_add) #Get the original dS
 
                 for key in rawS_dict:
@@ -291,13 +321,13 @@ class Analysis_FMR(Analysis):
 
         return self.ref_indx_info
 
-    def rawS(self):
+    def calc_raw_S(self):
         """Return the raw S matrix"""
         if self.vna_ref:
             data_dict = {}
             for name in self.components:
                 data, backg = self.subtract_background_ij("d_S", name, self.original_data_add, True,
-                                                          "ref_S", 0, self.original_ref_add, sign=1)
+                                                          True,"ref_S", 0, self.original_ref_add, sign=1)
                 data_dict["S" + name] = data
             data_dict = {k: v.astype(np.float32) for k, v in
                          data_dict.items()}  # ensuring compressed data to 4 bits
@@ -306,7 +336,7 @@ class Analysis_FMR(Analysis):
             dict = self.dic_typ("S", self.rawS_add)
         return dict
 
-    def subtract_ref(self, single, nb_g=1, ref_indx= None):
+    def subtract_ref(self, single, fit, nb_g=1, ref_indx= None):
         """Calculates the raw data (files with subtraction) or the subtraction of ref. (files of raw data)"""
         #if single: ########This block should not be here, because it is not real when single=False
         #
@@ -322,7 +352,7 @@ class Analysis_FMR(Analysis):
             self.ref_indx = None
             self.store_ref_indx("AverageBackground")
         deltaS_dict, backg_dict = self.subtract_background_typ("S",
-                                     self.rawS_add, single, self.ref_indx, self.rawS_add, nb_g, sign=-1)
+                                     self.rawS_add, single, fit, self.ref_indx, self.rawS_add, nb_g, sign=-1)
         for key in deltaS_dict:
             self.write_ij_component(deltaS_dict[key], self.calc_add, key)
         for key in backg_dict:
@@ -331,6 +361,11 @@ class Analysis_FMR(Analysis):
     def d_S(self, target):
         """Return the dSij array"""
         array = self.get_ij("d_S", target, self.calc_add)
+        return array
+
+    def raw_S(self, target):
+        """Return the dSij array"""
+        array = self.get_ij("S", target, self.rawS_add)
         return array
 
     def plot_dij_plotly(self, typ, idx, low_x, high_x, save=False, plot=True):
@@ -459,3 +494,84 @@ class FitStore:
 
                 err = fit_dict["errors"].get(name, None)
                 grp[name + "_err"][row] = err if err is not None else np.nan
+
+    def load_fit_results(self, filename, group="Lorentzian fitting"):
+        """
+        Reads back all fit parameters + errors from HDF5.
+        Returns
+        -------
+        dict of arrays, ordered by index
+        """
+
+        import h5py
+
+        with h5py.File(filename, "r") as f:
+            grp = f[group]
+
+            data = {}
+
+            # index is always the master ordering
+            idx = grp["index"][:]
+            order = np.argsort(idx)
+
+            data["index"] = idx[order]
+            data["field"] = grp["field"][:][order]
+
+            # all parameter datasets (exclude metadata)
+            for key in grp.keys():
+                if key in ["index", "field"]:
+                    continue
+                if key.endswith("_err"):
+                    continue
+
+                data[key] = grp[key][:][order]
+                data[key + "_err"] = grp[key + "_err"][:][order]
+
+        return data
+
+    def plot_fit_parameters(self, data, x_axis="field", params=None):
+        """
+        Plot fitted parameters vs field or index.
+
+        Parameters
+        ----------
+        data : dict
+            Output of load_fit_results()
+
+        x_axis : str
+            "field" or "index"
+
+        params : list
+            Parameters to plot (default = all available)
+        """
+
+        import matplotlib.pyplot as plt
+
+        if params is None:
+            params = [
+                k for k in data.keys()
+                if not k.endswith("_err")
+                   and k not in ["index", "field"]
+            ]
+
+        x = data[x_axis]
+
+        for name in params:
+            y = data[name]
+            yerr = data.get(name + "_err", None)
+
+            plt.errorbar(
+                x,
+                y,
+                yerr=yerr,
+                fmt="o-",
+                capsize=3,
+                label=name
+            )
+
+        plt.xlabel(x_axis)
+        plt.ylabel("value")
+        plt.title("Fitted parameters vs " + x_axis)
+        plt.legend()
+        plt.grid(True)
+        plt.show()
