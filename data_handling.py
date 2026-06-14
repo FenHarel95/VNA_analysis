@@ -195,25 +195,30 @@ class Analysis:
         data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
         return data_dict
 
-    def subtract_background_ij(self, typ, target, add, single, ref_typ, ref_indx, ref_add, sign=-1):
+    def subtract_background_ij(self, typ, target, add, single, ref_typ, ref_indx, ref_add, n_bg, sign=-1):
         initial = self.get_ij(typ, target, add)
         if single:
             background = self.get_ij_indx(ref_typ, target, ref_indx, ref_add)
         else:
             # Background components method
             U, S, Vt = np.linalg.svd(initial, full_matrices=False)
-            background = np.outer(U[:, 0] * S[0], Vt[0, :])  # background = first component
+            #background = np.outer(U[:, 0] * S[0], Vt[0, :])  # background = first component
+            background = (
+                    U[:, :n_bg]
+                    @ np.diag(S[:n_bg])
+                    @ Vt[:n_bg, :]
+            )
             #initial = initial + sign*background
             #background = np.zeros(len(initial[0]), dtype=complex)
 
         final = initial + sign*background
         return final, background #final has a shape [field,freqs], background [freqs]
 
-    def subtract_background_typ(self, typ, add, single, ref_indx, ref_add, sign=-1):
+    def subtract_background_typ(self, typ, add, single, ref_indx, ref_add, n_bg, sign=-1):
         data_dict = {}
         backg_dict = {}
         for name in self.components:
-            data, backg = self.subtract_background_ij(typ, name, add, single, typ, ref_indx, ref_add, sign)
+            data, backg = self.subtract_background_ij(typ, name, add, single, typ, ref_indx, ref_add, n_bg, sign)
             data_dict["d_"+typ+name] = data
             backg_dict["ref_"+typ+name] = backg
         data_dict = {k: v.astype(np.float32) for k, v in data_dict.items()}  # ensuring compressed data to 4 bits
@@ -289,9 +294,6 @@ class Analysis_FMR(Analysis):
     def rawS(self):
         """Return the raw S matrix"""
         if self.vna_ref:
-        #    dict, back = self.subtract_background_typ("d_S",
-        #                                               self.original_data_add, True, "ref_S",0,
-        #                                             self.original_ref_add, sign=1)
             data_dict = {}
             for name in self.components:
                 data, backg = self.subtract_background_ij("d_S", name, self.original_data_add, True,
@@ -304,7 +306,7 @@ class Analysis_FMR(Analysis):
             dict = self.dic_typ("S", self.rawS_add)
         return dict
 
-    def subtract_ref(self, single, ref_indx= None):
+    def subtract_ref(self, single, nb_g=1, ref_indx= None):
         """Calculates the raw data (files with subtraction) or the subtraction of ref. (files of raw data)"""
         #if single: ########This block should not be here, because it is not real when single=False
         #
@@ -320,7 +322,7 @@ class Analysis_FMR(Analysis):
             self.ref_indx = None
             self.store_ref_indx("AverageBackground")
         deltaS_dict, backg_dict = self.subtract_background_typ("S",
-                                     self.rawS_add, single, self.ref_indx, self.rawS_add, sign=-1)
+                                     self.rawS_add, single, self.ref_indx, self.rawS_add, nb_g, sign=-1)
         for key in deltaS_dict:
             self.write_ij_component(deltaS_dict[key], self.calc_add, key)
         for key in backg_dict:
