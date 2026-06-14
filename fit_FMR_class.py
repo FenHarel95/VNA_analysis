@@ -4,8 +4,8 @@ from fit_PSWS_class import BaseComplexModel
 
 pi = np.pi
 # Bounds stored as dicts keyed by parameter name
-LOWER_BOUNDS = {"Ar":-1e2, "Ai":-1e2, "fo":0.05, "df":0.0001, "re0": -0.5,  "im0": -0.5}
-UPPER_BOUNDS = {"Ar":1e2, "Ai":1e2, "fo":50, "df":2, "re0": 0.5,  "im0": 0.5}
+LOWER_BOUNDS = {"Ar":-1e2, "Ai":-1e2, "fo":0, "df":0.0001, "re0": -0.5,  "im0": -0.5}
+UPPER_BOUNDS = {"Ar":1e2, "Ai":1e2, "fo":70, "df":2, "re0": 0.5,  "im0": 0.5}
 
 #########################
 # Complex Lorentzian Models
