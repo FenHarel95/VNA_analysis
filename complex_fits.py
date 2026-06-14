@@ -139,9 +139,9 @@ class ComplexFitter:
         free_idx = 0
         for name in self.model.param_names:
             if name in self.fixed:
-                results[name] = self.fixed[name]
+                results[name] = float(self.fixed[name])
             else:
-                results[name] = optimized[free_idx]
+                results[name] = float(optimized[free_idx])
                 free_idx += 1
         return results
 
@@ -232,6 +232,38 @@ class ComplexFitter:
             print(f"{name:<12}{value_str:>20}{err_str:>15}{unit:>10}{fixed:>10}")
 
         print("-" * 70)
+
+    def export_fit_dict(self):
+        """Creates dictionary ready for storing fitting results."""
+        result = self.result
+        cov = self.cov
+
+        if cov is not None:
+            errors = np.sqrt(np.diag(cov))
+        else:
+            errors = None
+
+        export = {
+            "params": {},
+            "errors": {},
+            "units": {},
+            "fixed": {}
+        }
+
+        free_index = 0
+
+        for name in self.model.param_names:
+
+            export["params"][name] = float(result[name])
+            export["units"][name] = self.model.units.get(name, "")
+
+            if name in self.fixed:
+                export["errors"][name] = None
+            else:
+                export["errors"][name] = float(errors[free_index]) if errors is not None else None
+                free_index += 1
+
+        return export
 
     @staticmethod
     def unconcatenate(z):
