@@ -97,7 +97,7 @@ class Analysis:
             field_outP = (-4.75612131323894e-10*A**8 + 5.53240901595132e-8*A**7 - 2.44397032127303e-6*A**6 +
                           5.44573750852832e-5*A**5 - 0.000670050456046096*A**4 + 0.00455904626621348*A**3 -
                           0.0156901329345105*A**2 + 0.0762165481027225*A + 0.0164075279665365)
-
+            #Measured 09/06/2026
             field_inP_mT = (-2.791826973437297e-12 * A ** 13 + 2.629557158787310e-10 * A ** 12 -
                             3.341952544859737e-09 * A ** 11 - 5.932640840884606e-07 * A ** 10 +
                             3.802178264636290e-05 * A ** 9 - 1.130650994442105e-03 * A ** 8 +
@@ -250,30 +250,32 @@ class Analysis_FMR(Analysis):
         self.sample = sample + "_" + geo
         self.vna_ref = vna_ref #Reference is already subtracted from data.This normally is the case up to 11/06/2026.
         self.ref = False
-        self.ref_indx = None
+        self.ref_indx = self.read_ref_indx()
         self.rawS_add = "/data/ "
 
-        if self.vna_ref:
+        if vna_ref is True:
             self.ref = True
-            self.original_data_add = "/data/VNA "
-            self.original_ref_add = self.original_data_add
+            if self.ref_indx is None:
+                self.original_data_add = "/data/VNA "
+                self.original_ref_add = self.original_data_add
 
-            rawS_dict = self.rawS() # calculate the raw data
-            original_dS_matrix = self.dic_typ("d_S", self.original_data_add) #Get the original dS
-            
-            for key in rawS_dict:
-                self.write_ij_component(rawS_dict[key], self.rawS_add, key) # store it in the file
-                
-            for key in original_dS_matrix:
-                self.write_ij_component(original_dS_matrix[key], self.calc_add, key) # store it in the file
-            
-            
-            self.store_ref_indx("VNA ref")
-            self.ref_indx = None
+                rawS_dict = self.rawS() # calculate the raw data
+                original_dS_matrix = self.dic_typ("d_S", self.original_data_add) #Get the original dS
+
+                for key in rawS_dict:
+                    self.write_ij_component(rawS_dict[key], self.rawS_add, key) # store it in the file
+
+                for key in original_dS_matrix:
+                    self.write_ij_component(original_dS_matrix[key], self.calc_add, key) # store it in the file
+
+                self.store_ref_indx("VNA ref")
+                self.ref_indx = None
 
         else:
-            #self.rawS_add = "/data/VNA "
             self.data_add = None
+            if self.ref_indx is not None:
+                self.ref = True
+
 
     def read_ref_indx(self):
         with h5py.File(self.file, "r") as f:
@@ -324,18 +326,10 @@ class Analysis_FMR(Analysis):
         for key in backg_dict:
             self.write_ij_component(backg_dict[key], self.calc_add, key)
 
-    #def original_dS(self):
-    #    dict = self.dic_typ("dS", self.original_data_add)
-    #    return dict
-
-    ###############Check from here
-    #def get_dS(self, target):
-    #    """Return the dSij array"""
-    #    if self.ref:
-    #        array = self.get_ij("d_S", target, self.calc_add)
-    #    else:
-    #        array = 0
-    #    return array
+    def d_S(self, target):
+        """Return the dSij array"""
+        array = self.get_ij("d_S", target, self.calc_add)
+        return array
 
     def plot_dij_plotly(self, typ, idx, low_x, high_x, save=False, plot=True):
         """Plots the "typ"ij matrix for data stored in self.cal_add. e.g.: dSij matrix"""
@@ -399,3 +393,67 @@ class Analysis_PSWS(Analysis):
         interact(plot_dij,
                  index=IntSlider(value=n_0, min=0, max=n_max, step=1, readout_format='.0f', description=r"Field index")
                  );
+
+
+class FitStore:
+    def __init__(self, filename, group="fit_results"):
+        self.filename = filename
+        self.group = group
+
+    # -------------------------
+    # initialization
+    # -------------------------
+    def _init(self, grp, fit_dict):
+
+        grp.create_dataset("index", shape=(0,), maxshape=(None,), dtype="i8")
+        grp.create_dataset("field", shape=(0,), maxshape=(None,), dtype="f8")
+
+        for name in fit_dict["params"]:
+            grp.create_dataset(name, shape=(0,), maxshape=(None,), dtype="f8")
+            grp.create_dataset(name + "_err", shape=(0,), maxshape=(None,), dtype="f8")
+
+    # -------------------------
+    # main save function
+    # -------------------------
+    def save(self, index, field, fit_dict):
+
+        with h5py.File(self.filename, "a") as f:
+
+            grp = f.require_group(self.group)
+
+            if "index" not in grp:
+                self._init(grp, fit_dict)
+
+            indices = grp["index"][:]
+
+            # -------------------------------------------------
+            # 1. CHECK EXISTING ENTRY (ONLY BY INDEX)
+            # -------------------------------------------------
+            match = np.where(indices == index)[0]
+
+            if len(match) > 0:
+                row = int(match[0])
+                overwrite = True
+            else:
+                row = len(indices)
+                overwrite = False
+
+                # expand datasets
+                for name in grp.keys():
+                    grp[name].resize((row + 1,))
+
+                grp["index"][row] = index
+
+            # -------------------------------------------------
+            # 2. WRITE METADATA (field is NEVER used for logic)
+            # -------------------------------------------------
+            grp["field"][row] = field
+
+            # -------------------------------------------------
+            # 3. WRITE PARAMETERS
+            # -------------------------------------------------
+            for name, val in fit_dict["params"].items():
+                grp[name][row] = val
+
+                err = fit_dict["errors"].get(name, None)
+                grp[name + "_err"][row] = err if err is not None else np.nan
