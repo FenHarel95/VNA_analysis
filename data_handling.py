@@ -327,7 +327,8 @@ class Analysis_FMR(Analysis):
             data_dict = {}
             for name in self.components:
                 data, backg = self.subtract_background_ij("d_S", name, self.original_data_add, True,
-                                                          True,"ref_S", 0, self.original_ref_add, sign=1)
+                                                          True,"ref_S", 0, self.original_ref_add,
+                                                          n_bg=1, sign=1)
                 data_dict["S" + name] = data
             data_dict = {k: v.astype(np.float32) for k, v in
                          data_dict.items()}  # ensuring compressed data to 4 bits
@@ -386,7 +387,7 @@ class Analysis_FMR(Analysis):
 
         interact(plot_dij,
                  index=IntSlider(value=n_0, min=0, max=n_max, step=1, readout_format='.0f', description=r"Field index")
-                 );
+                 )
 
 class Analysis_PSWS(Analysis):
     """ Main class that handles analysis of PSWS spectroscopy data.
@@ -429,7 +430,7 @@ class Analysis_PSWS(Analysis):
 
         interact(plot_dij,
                  index=IntSlider(value=n_0, min=0, max=n_max, step=1, readout_format='.0f', description=r"Field index")
-                 );
+                 )
 
 
 class FitStore:
