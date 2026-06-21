@@ -27,6 +27,7 @@ class ComplexLorentzian_freq(BaseComplexModel):
 
     @staticmethod
     def model(f, Ar, Ai, fo, df, re0, im0):
+        """df is the half-linewidth at half-maximum."""
         re = re0 + Ar*func.antisym_lorentzian(f,fo,df) + Ai*func.sym_lorentzian(f,fo,df)
         im = im0 + Ar*func.sym_lorentzian(f,fo,df) - Ai*func.antisym_lorentzian(f,fo,df) #inverted signs compared to
         # normal lorentzian
