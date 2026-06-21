@@ -496,6 +496,17 @@ class FitStore:
                 err = fit_dict["errors"].get(name, None)
                 grp[name + "_err"][row] = err if err is not None else np.nan
 
+    def slice_dict(self, data, start, end):
+        """
+        Returns a new dictionary where all array-like values
+        are sliced from start to end (end inclusive).
+        """
+        end = end + 1
+        return {
+            key: np.asarray(value)[start:end]
+            for key, value in data.items()
+        }
+
     def load_fit_results(self, filename, group="Lorentzian fitting"):
         """
         Reads back all fit parameters + errors from HDF5.
@@ -576,3 +587,101 @@ class FitStore:
         plt.legend()
         plt.grid(True)
         plt.show()
+
+    def plot_fit_parameters_subplots(self, data, x_axis="field", params=None, x_label=None):
+        """
+        Plot fitted parameters vs field or index using Plotly subplots.
+
+        Parameters
+        ----------
+        data : dict
+            Output of load_fit_results()
+
+        x_axis : str
+            "field" or "index"
+
+        params : list
+            Parameters to plot (default = all available)
+        """
+
+        units = {
+            "fo": "GHz",
+            "df": "GHz",
+            "gamma": "GHz/T",
+            "field": "T",
+            "Ar": "U",
+            "Ai": "U",
+            "re0": "U",
+            "im0": "U",
+
+        }
+
+        if x_label is None:
+            x_label = x_axis
+
+        if params is None:
+            params = [
+                k for k in data.keys()
+                if not k.endswith("_err")
+                   and k not in ["index", "field"]
+            ]
+
+        n_params = len(params)
+
+        fig = make_subplots(
+            rows=n_params,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.03,
+            subplot_titles=params
+        )
+
+        x = data[x_axis]
+
+        for i, name in enumerate(params, start=1):
+            y = data[name]
+            yerr = data.get(name + "_err", None)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=y,
+                    mode="lines+markers",
+                    name=name,
+                    showlegend=False,
+                    error_y=dict(
+                        type="data",
+                        array=yerr,
+                        visible=yerr is not None,
+                    ),
+                    hovertemplate=(
+                        f"{x_axis}: %{{x}}<br>"
+                        f"{name}: %{{y}}<extra></extra>"
+                    )
+                ),
+                row=i,
+                col=1
+            )
+
+            label = f"{name} ({units[name]})" if name in units else name
+
+            fig.update_yaxes(
+                title_text=label,
+                row=i,
+                col=1
+            )
+
+        fig.update_xaxes(
+            title_text=x_label,
+            row=n_params,
+            col=1
+        )
+
+        fig.update_layout(
+            title=f"Fitted parameters vs {x_axis}",
+            template="plotly_white",
+            hovermode="x unified",
+            height=max(300 * n_params, 500)
+        )
+
+        fig.show()
