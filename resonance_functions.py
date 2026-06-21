@@ -1,4 +1,5 @@
 import numpy as np
+from pygments.lexers.haxe import HxmlLexer
 
 #Constants
 mu_0 = 4*np.pi*1e-7 #SI units
@@ -78,17 +79,31 @@ def kittel_general(H, gamma, Hx, Hy):
     gamma (GHz/T)
     H (T)
     """
-    f = gamma*np.sqrt( (H+Hx)*(H+Hy) ) #GHz
+    f = gamma*np.sqrt( abs(H+Hx)*abs(H+Hy) ) #GHz
     return f
 
-def kittel_cubic(H,gamma,Ms,Hc,Hu,Hs,A,T):
+def kittel_cubic_inP(H,gamma,Ms,Hc,Hu,Hs,Hex,loo=True, n1=False):
     """
-    FMR for films with cubic anisotropy.
-    gamma (GHz/T), is the gyromagnetic ratio
-    M_s (T), saturation magnetization
-    B_u (T), uniaxial anisotropy, parametrized with respect to axis per to film,
-    B_s (T), perpendicular surface anisotropy, axis perp. to film.
-    A (J/m), exchange stiffness constant,
-    T (m), thickness
-    B_0 (T), external magnetic field.
+    FMR for films with cubic anisotropy. For Only valid for modes n=0,1
+    gamma (GHz/T), is the gyromagnetic ratio. Ref. Solano_2024 Phd Thesis
+    H (T), external magnetic field.
+    Ms (T), saturation magnetization
+    Hc (T), uniaxial anisotropy field, parametrized with respect to axis per to film,
+    Hs (T), perpendicular surface anisotropy field, axis perp. to film.
+    Hex (Y), exchange stiffness field,
+    loo, True when Ms & H // to [100], False when Ms & H // to [110]
     """
+    if n1:
+        n=1
+    else:
+        n=0
+    if loo:
+        fc1=1
+        fc2=1
+    else:
+        fc1=-1
+        fc2=1/2
+    hx = fc1*Hc + n*Hex
+    hy = fc2*Hc + Ms + - Hu - (1+n)*Hs + n*Hex
+    f = kittel_general(H, gamma, hx, hy)
+    return f
