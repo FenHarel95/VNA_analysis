@@ -1,3 +1,5 @@
 *.pyc
-vFZU/.ipynb_checkpoints/Fitting_FMR_lorentzian_vFZU-checkpoint.ipynb
 __pycache__/data_handling.cpython-312.pyc
+__pycache__/fit_PSWS_class.cpython-312.pyc
+__pycache__/fitting_functions.cpython-312.pyc
+__pycache__/resonance_functions.cpython-312.pyc
