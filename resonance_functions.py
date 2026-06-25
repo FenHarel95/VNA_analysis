@@ -107,3 +107,11 @@ def kittel_cubic_inP(H,gamma,Ms,Hc,Hu,Hs,Hex,loo=True, n1=False):
     hy = fc2*Hc + Ms + - Hu - (1+n)*Hs + n*Hex
     f = kittel_general(H, gamma, hx, hy)
     return f
+
+def kittel_cylinder_longA(H, gamma, Ms, Ku, Nz, Nx, Ny):
+    """Ms and H in T, Ku in J/m, gamma in GHz/T"""
+    Hu = 2*Ku/Ms
+    hx = mu_0*Hu + (Ny-Nz)*Ms
+    hy = mu_0*Hu + (Nx-Nz)*Ms
+    f = kittel_general(H, gamma, hx, hy)
+    return f
