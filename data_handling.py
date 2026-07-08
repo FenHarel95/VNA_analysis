@@ -3,6 +3,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from ipywidgets import interact, FloatSlider, IntSlider
+from pathlib import Path
+import h5py
 
 class Analysis:
     """ Main class that handles analysis of VNA spectroscopy data.
@@ -32,6 +34,12 @@ class Analysis:
             self.frq_add = "/data/VNA frequency" #Hz
             self.curr_add = "/data/magnet current" #A
             self.field_add = "/data/magnet field" #T
+        if self.setup == "FZU_FMR_HSweep":
+            self.rawS_add = "data/VNA "
+            self.pow_add = "/data/VNA power"  # dBm
+            self.CWfreq_add = "/data/VNA CW_frequency"  # GHz
+            self.curr_add = "/data/magnet current"  # A
+            self.field_add = "/data/magnet field"  # T
         if self.setup == "CHAOS":
             self.rawS_add = "/data/PNA5225b "
             self.pow_add = "/data/PNA5225b power"
@@ -40,9 +48,9 @@ class Analysis:
 
         with h5py.File(self.file, "r") as f:
             self.power = f[self.pow_add][0]
-            self.freqs = f[self.frq_add][0, :]*(1e-9) #GHz (Data should be saved in Hz)
             if self.setup in ("Konstanz_PSWS", "FZU_FMR"):
                 # NumPy arrays
+                self.freqs = f[self.frq_add][0, :] * (1e-9)  # GHz (Data should be saved in Hz)
                 self.curr = f[self.curr_add][:] #A (Data should be saved in A)
                 self.field = self.calc_field(geo)
             else:
@@ -61,6 +69,7 @@ class Analysis:
             #NumPy arrays
             array = f[add + f"{typ}{target}"][:]
         return array
+
 
     def get_ij_indx(self, typ, target, indx, add):
         """typ: S, Z, dL, etc. Target: ij. indx (normally field) to extract, add: generic address to find them in h5 file"""
@@ -389,6 +398,60 @@ class Analysis_FMR(Analysis):
                  index=IntSlider(value=n_0, min=0, max=n_max, step=1, readout_format='.0f', description=r"Field index")
                  )
 
+class Analysis_FMR_HSweep(Analysis):
+    """ Main class that handles analysis of FMR spectroscopy data for magnetic field sweeps.
+        """
+
+    def __init__(self, address, example_file_name: str, sample: str, setup: str, geo: str, vna_ref: str, **kwargs):
+        #example_file is used to extract the common information
+        super().__init__(address, example_file_name, sample, setup, geo, **kwargs)
+        self.sample = sample + "_" + geo
+        self.vna_ref = vna_ref  # Reference is already subtracted from data.This normally is the case up to 11/06/2026.
+        self.ref = True
+        self.original_data_add = "/data/VNA "
+        self.file_map = self.build_frequency_file_map()
+        self.freqs = np.array(sorted(self.file_map.keys())) #We define freqs for this case
+
+    def build_frequency_file_map(self):
+        """
+        Scan all .h5 files in a folder and create a dictionary:
+            first_frequency -> filepath
+        """
+
+        freq_to_file = {}
+
+        for file in Path(self.address).glob("*.h5.ma8"):
+            try:
+                with h5py.File(file, "r") as f:
+                    freq = f[self.CWfreq_add][0]  # first element only, all should be teh same
+
+                freq_to_file[np.round(float(freq),3)] = file
+
+            except Exception as e:
+                print(f"Skipping {file.name}: {e}")
+
+        return freq_to_file
+
+    def batch_data_reading(self):
+        """Compiles files into single data set"""
+
+    def get_field(self, freq):
+        self.file = self.file_map[freq]
+        with h5py.File(self.file, "r") as f:
+            field = f[self.field_add][:]
+        return field
+
+    def d_S(self, target, freq):
+        """Return the dSij array"""
+        self.file = self.file_map[freq]
+        array = self.get_ij("d_S", target, self.original_data_add)
+        return array
+
+    def get_ij(self, typ, target, add): #modified to handle also the Hsweep shaped arrays
+        """Return a 1D trace from the HDF5 file."""
+        with h5py.File(self.file, "r") as f:
+            return np.asarray(f[add + f"{typ}{target}"][:]).ravel()
+
 class Analysis_PSWS(Analysis):
     """ Main class that handles analysis of PSWS spectroscopy data.
     """
@@ -514,8 +577,6 @@ class FitStore:
         -------
         dict of arrays, ordered by index
         """
-
-        import h5py
 
         with h5py.File(filename, "r") as f:
             grp = f[group]
