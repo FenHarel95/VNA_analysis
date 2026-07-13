@@ -1,5 +1,4 @@
 import numpy as np
-from pygments.lexers.haxe import HxmlLexer
 
 #Constants
 mu_0 = 4*np.pi*1e-7 #SI units
@@ -115,3 +114,19 @@ def kittel_cylinder_longA(H, gamma, Ms, Ku, Nz, Nx, Ny):
     hy = mu_0*Hu + (Nx-Nz)*Ms
     f = kittel_general(H, gamma, hx, hy)
     return f
+
+def inverse_kittel_general(f, gamma, Hx, Hy):
+    """
+        Returns the largest positive resonance field
+        gamma (GHz/T)
+        f (GHz)
+        Hx, Hy (T)
+    """
+    H1 = ( -(Hx+Hy) + np.sqrt((Hx+Hy)**2 + 4*(f/gamma)**2))/2
+    H2 = ( -(Hx+Hy) - np.sqrt((Hx+Hy)**2 + 4*(f/gamma)**2))/2
+
+    if H1>H2:
+        H = H1
+    else:
+        H = H2
+    return H
