@@ -497,9 +497,10 @@ class Analysis_PSWS(Analysis):
 
 
 class FitStore:
-    def __init__(self, filename, group="fit_results"):
+    def __init__(self, filename, val_type:str, group="fit_results"):
         self.filename = filename
         self.group = group
+        self.val_type = val_type
 
     # -------------------------
     # initialization
@@ -507,7 +508,7 @@ class FitStore:
     def _init(self, grp, fit_dict):
 
         grp.create_dataset("index", shape=(0,), maxshape=(None,), dtype="i8")
-        grp.create_dataset("field", shape=(0,), maxshape=(None,), dtype="f8")
+        grp.create_dataset(self.val_type, shape=(0,), maxshape=(None,), dtype="f8")
 
         for name in fit_dict["params"]:
             grp.create_dataset(name, shape=(0,), maxshape=(None,), dtype="f8")
@@ -516,7 +517,7 @@ class FitStore:
     # -------------------------
     # main save function
     # -------------------------
-    def save(self, index, field, fit_dict):
+    def save(self, index, val, fit_dict):
 
         with h5py.File(self.filename, "a") as f:
 
@@ -548,7 +549,7 @@ class FitStore:
             # -------------------------------------------------
             # 2. WRITE METADATA (field is NEVER used for logic)
             # -------------------------------------------------
-            grp["field"][row] = field
+            grp[self.val_type][row] = val
 
             # -------------------------------------------------
             # 3. WRITE PARAMETERS
@@ -588,11 +589,11 @@ class FitStore:
             order = np.argsort(idx)
 
             data["index"] = idx[order]
-            data["field"] = grp["field"][:][order]
+            data[self.val_type] = grp[self.val_type][:][order]
 
             # all parameter datasets (exclude metadata)
             for key in grp.keys():
-                if key in ["index", "field"]:
+                if key in ["index", self.val_type]:
                     continue
                 if key.endswith("_err"):
                     continue
@@ -612,7 +613,7 @@ class FitStore:
             Output of load_fit_results()
 
         x_axis : str
-            "field" or "index"
+            "index", "field" or "freq" depending on val_type
 
         params : list
             Parameters to plot (default = all available)
@@ -624,7 +625,7 @@ class FitStore:
             params = [
                 k for k in data.keys()
                 if not k.endswith("_err")
-                   and k not in ["index", "field"]
+                   and k not in ["index", "field", "freq"]
             ]
 
         x = data[x_axis]
@@ -659,7 +660,7 @@ class FitStore:
             Output of load_fit_results()
 
         x_axis : str
-            "field" or "index"
+            "index", "field" or "freq" depending on val_type
 
         params : list
             Parameters to plot (default = all available)
@@ -668,8 +669,11 @@ class FitStore:
         units = {
             "fo": "GHz",
             "df": "GHz",
+            "dH": "T",
             "gamma": "GHz/T",
+            "Ho": "T",
             "field": "T",
+            "freq": "GHz",
             "Ar": "U",
             "Ai": "U",
             "re0": "U",
@@ -684,7 +688,7 @@ class FitStore:
             params = [
                 k for k in data.keys()
                 if not k.endswith("_err")
-                   and k not in ["index", "field"]
+                   and k not in ["index", "field", "freq"]
             ]
 
         n_params = len(params)
