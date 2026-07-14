@@ -294,7 +294,10 @@ class ComplexFitter:
 
         plt.axhline(0, color='black', linewidth=1)
         plt.gca().set_facecolor('#edf1f7')
-        plt.xlabel("Frequency (GHz)")
+        if self.model.fit_type == "field":
+            plt.xlabel("applied field (T)")
+        else:
+            plt.xlabel("frequency (GHz)")
         plt.ylabel("dLij (pH)")
         plt.title("Fitting Results")
         plt.legend()
