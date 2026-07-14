@@ -26,6 +26,7 @@ class ComplexLorentzian_freq(BaseComplexModel):
                       "re0": "U",
                       "im0" : "U",
                       }
+        self.fit_type = "frequency"
 
     @staticmethod
     def model(f, Ar, Ai, fo, df, re0, im0):
@@ -56,6 +57,7 @@ class ComplexLorentzianRipple_freq(BaseComplexModel):
         super().__init__(param_names)
         self.lower_bounds = LOWER_BOUNDS
         self.upper_bounds = UPPER_BOUNDS
+        self.fit_type = "frequency"
 
     @staticmethod
     def model(f,
@@ -108,6 +110,7 @@ class ComplexLorentzian_field(BaseComplexModel):
                       "re0": "U",
                       "im0" : "U",
                       }
+        self.fit_type = "field"
 
     @staticmethod
     def model(H, Ar, Ai, Ho, dH, re0, im0):

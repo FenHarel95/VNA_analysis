@@ -73,6 +73,7 @@ class ComplexGaussian(BaseComplexModel):
         super().__init__(param_names)
         self.lower_bounds = LOWER_BOUNDS
         self.upper_bounds = UPPER_BOUNDS
+        self.fit_type = "frequency"
 
     @staticmethod
     def model(f, A, w, fres, fper, fref, re0, im0):
@@ -91,6 +92,7 @@ class ComplexGaussianSimple(BaseComplexModel):
         super().__init__(param_names)
         self.lower_bounds = LOWER_BOUNDS
         self.upper_bounds = UPPER_BOUNDS
+        self.fit_type = "frequency"
 
     @staticmethod
     def model(f, A, w, fres, fper, phi, re0, im0):
@@ -111,6 +113,7 @@ class TwoComplexGaussian(BaseComplexModel):
         self.units = DEFAULT_UNITS_2
         self.lower_bounds = LOWER_BOUNDS_2
         self.upper_bounds = UPPER_BOUNDS_2
+        self.fit_type = "frequency"
 
     @staticmethod
     def model(f, A1, w1, fres1, fper1, fref1,
@@ -130,6 +133,7 @@ class TwoComplexGaussianSimple(BaseComplexModel):
         self.units = DEFAULT_UNITS_2
         self.lower_bounds = LOWER_BOUNDS_2
         self.upper_bounds = UPPER_BOUNDS_2
+        self.fit_type = "frequency"
 
     @staticmethod
     def model(f, A1, w1, fres1, fper1, phi1,
@@ -150,6 +154,7 @@ class ThreeComplexGaussianSimple(BaseComplexModel):
         self.units = DEFAULT_UNITS_2
         self.lower_bounds = LOWER_BOUNDS_2
         self.upper_bounds = UPPER_BOUNDS_2
+        self.fit_type = "frequency"
 
     @staticmethod
     def model(f, A1, w1, fres1, fper1, phi1,
@@ -170,6 +175,7 @@ class ComplexGaussianVG(BaseComplexModel):
         super().__init__(param_names)
         self.lower_bounds = LOWER_BOUNDS
         self.upper_bounds = UPPER_BOUNDS
+        self.fit_type = "frequency"
 
     @staticmethod
     def model(f, A, w, fres, D, fref, re0, im0):
@@ -187,6 +193,7 @@ class TwoComplexGaussianVG(BaseComplexModel):
         self.units = DEFAULT_UNITS_2
         self.lower_bounds = LOWER_BOUNDS_2
         self.upper_bounds = UPPER_BOUNDS_2
+        self.fit_type = "frequency"
 
     @staticmethod
     def model(f, A1, w1, fres1, D1, fref1,
