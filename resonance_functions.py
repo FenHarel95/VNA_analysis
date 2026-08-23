@@ -122,8 +122,24 @@ def inverse_kittel_general(f, gamma, Hx, Hy):
         f (GHz)
         Hx, Hy (T)
     """
-    H1 = ( -(Hx+Hy) + np.sqrt((Hx+Hy)**2 + 4*(f/gamma)**2))/2
-    H2 = ( -(Hx+Hy) - np.sqrt((Hx+Hy)**2 + 4*(f/gamma)**2))/2
+    H1 = ( -(Hx+Hy) + np.sqrt((Hx+Hy)**2 - 4*(Hx*Hy-(f/gamma)**2)))/2
+    H2 = ( -(Hx+Hy) - np.sqrt((Hx+Hy)**2 - 4*(Hx*Hy-(f/gamma)**2)))/2
+
+    if H1>H2:
+        H = H1
+    else:
+        H = H2
+    return H
+
+def inverse_bulkHematite(f, gamma, HD, HK, Hex):
+    """
+        Returns the largest positive resonance field
+        gamma (GHz/T)
+        f (GHz)
+        HD, HK, Hex (T)
+    """
+    H1 = ( -HD + np.sqrt((HD)**2 - 4*(HK*Hex-(f/gamma)**2)))/2
+    H2 = ( -HD - np.sqrt((HD)**2 - 4*(HK*Hex-(f/gamma)**2)))/2
 
     if H1>H2:
         H = H1
