@@ -1,6 +1,8 @@
 import numpy as np
 import fitting_functions as func
 from fit_PSWS_class import BaseComplexModel
+from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
 
 pi = np.pi
 # Bounds stored as dicts keyed by parameter name
@@ -162,3 +164,47 @@ class ComplexLorentzian_slope_field(BaseComplexModel):
             theta += 2 * np.pi
         theta_deg = np.degrees(theta)  # degrees
         return theta_deg
+
+
+#########################
+# Linewidth models
+#########################
+
+class linear_dHvsf_FMR():
+    def __init__(self, dH_data, dH_err_data, f_data, gamma):
+        self.dH_data = dH_data #We expect dH in T
+        self.dH_err_data = dH_err_data
+        self.f_data = f_data #We expect f in GHz
+        self.gamma = gamma #We expect gamma in GHz/T
+
+    @staticmethod
+    def linear(x, m, b):
+        return m * x + b
+
+    def fit(self):
+        self.popt, self.pcov = curve_fit(self.linear, self.f_data, self.dH_data)
+        self.slope, self.dH0 = self.popt
+
+        self.alpha = self.gamma * self.slope / 2
+
+    def results(self):
+        self.fit()
+        plt.rcParams.update({
+            "font.size": 14,  # base font size
+            "axes.labelsize": 16,  # x/y labels
+            "axes.titlesize": 18,  # title
+            "xtick.labelsize": 14,  # x tick labels
+            "ytick.labelsize": 14,  # y tick labels
+            "legend.fontsize": 14,
+        })
+
+        x_fit = np.linspace(np.min(self.f_data), np.max(self.f_data), 500)
+        y_fit = self.linear(x_fit, *self.popt)
+        plt.plot(x_fit, y_fit*1000, label=f"Fit: y = {self.popt[0]:.3g}x + {self.popt[1]:.3g}", color="red")
+        plt.errorbar(self.f_data, self.dH_data*1000, yerr=self.dH_err_data*1000, fmt='o', capsize=3, markersize=5)
+        #We assume dH in T
+        plt.xlabel("f (GHz)")
+        plt.ylabel(r"$\Delta$H (mT)")
+        plt.show()
+
+        print(f"alpha={self.alpha}, dH0={self.dH0 * 1000}mT")
