@@ -5,9 +5,9 @@ from fit_PSWS_class import BaseComplexModel
 pi = np.pi
 # Bounds stored as dicts keyed by parameter name
 LOWER_BOUNDS = {"Ar":-1e2, "Ai":-1e2, "fo":0, "df":0.0001, "re0": -0.5,  "im0": -0.5, "B":0, "tau":0, "phi":0,
-                "Ho":0, "dH":0.0001}
+                "Ho":0, "dH":0.0001, "m":-1000}
 UPPER_BOUNDS = {"Ar":1e2, "Ai":1e2, "fo":70, "df":2, "re0": 0.5,  "im0": 0.5, "B":0.01, "tau":1000, "phi":2*pi,
-                "Ho":2, "dH":0.2}
+                "Ho":2, "dH":0.2, "m":1000}
 
 #########################
 # Complex Lorentzian Models
@@ -124,6 +124,40 @@ class ComplexLorentzian_field(BaseComplexModel):
     def phase_deg(Ar, Ai, Ho, dH, re0, im0):
         A_complex = Ar + 1j * Ai
         theta = np.angle(A_complex) # rad
+        if theta < 0:
+            theta += 2 * np.pi
+        theta_deg = np.degrees(theta)  # degrees
+        return theta_deg
+
+class ComplexLorentzian_slope_field(BaseComplexModel):
+    def __init__(self):
+        param_names = ["Ar","Ai","Ho","dH","m","re0","im0"]
+        super().__init__(param_names)
+        self.lower_bounds = LOWER_BOUNDS
+        self.upper_bounds = UPPER_BOUNDS
+
+        self.units = {"Ar": "U",
+                      "Ai": "U",
+                      "Ho": "T",
+                      "dH": "T",
+                      "m": "1/T",
+                      "re0": "U",
+                      "im0" : "U",
+                      }
+        self.fit_type = "field"
+
+    @staticmethod
+    def model(H, Ar, Ai, Ho, dH, m, re0, im0):
+        """dH is the half-linewidth at half-maximum."""
+        #H = np.asarray(H).ravel() to delete
+        re = re0 + Ar*( func.antisym_lorentzian(H,Ho,dH) + m*H) + Ai*( func.sym_lorentzian(H,Ho,dH) + m*H)
+        im = im0 - Ar*( func.sym_lorentzian(H,Ho,dH) + m*H) + Ai*( func.antisym_lorentzian(H,Ho,dH) + m*H)
+        return np.concatenate([re, im])
+
+    @staticmethod
+    def phase_deg(Ar, Ai, Ho, dH, m, re0, im0):
+        A_complex = Ar + 1j * Ai
+        theta = np.angle(A_complex)  # rad
         if theta < 0:
             theta += 2 * np.pi
         theta_deg = np.degrees(theta)  # degrees
