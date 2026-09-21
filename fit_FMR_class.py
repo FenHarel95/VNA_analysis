@@ -187,7 +187,7 @@ class linear_dHvsf_FMR():
 
         self.alpha = self.gamma * self.slope / 2
 
-    def results(self):
+    def results(self, ):
         self.fit()
         plt.rcParams.update({
             "font.size": 14,  # base font size
