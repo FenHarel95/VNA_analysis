@@ -482,10 +482,10 @@ class Analysis_PSWS(Analysis):
             comment = f"_Refi_{self.ref_idx}"
         else:
             comment = "_MeanRef"
-        self.plot_ij_plotly(self.dic_ij(typ, self.calc_data_add), idx, typ, low_x, high_x, comment, save, plot)
+        self.plot_ij_plotly(self.dic_typ(typ, self.calc_data_add), idx, typ, low_x, high_x, comment, save, plot)
 
     def plot_dij_slider(self, typ, n_0):
-        n_max = (self.rawS("11R")).shape[0] - 1
+        n_max = (self.rawS_0("11R")).shape[0] - 1
 
         # Interactive sliders
         def plot_dij(index):
