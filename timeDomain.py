@@ -1439,7 +1439,8 @@ def plot_tof_comparison_2row(
 
     # Styling
     original_lw=3.5,     # thickness of the original FT (background)
-    gated_lw=1.3,        # thickness of the gated traces (on top)
+    gated_lw=1.3,       # thickness of the gated traces (time)
+    gated_freq_lw=1.3,  # thickness of the gated traces (freq)
     raw_lw=3.5,          # thickness of the raw frequency data
 
     # Font sizes
@@ -1503,7 +1504,7 @@ def plot_tof_comparison_2row(
     # trace on top keeps its contrast
     original_color = "#8FA3B8"
     gate_colors = ["#0072B2", "#D55E00"]
-    raw_color = "#D9A044"
+    raw_color = "#8FA3B8"#"#D9A044"
 
     # ------------------------------------------------------------
     # Scaling and labels
@@ -1513,7 +1514,7 @@ def plot_tof_comparison_2row(
 
     if not np.isclose(y_scale, 1):
         exponent = int(np.round(-np.log10(y_scale)))
-        scale_suffix = rf"(\times 10^{{{-exponent}}} U)"
+        scale_suffix = rf"(\times 10^{{{-exponent}}} ;\ U)"
     else:
         scale_suffix = ""
 
@@ -1607,7 +1608,7 @@ def plot_tof_comparison_2row(
                     f"but gated spectrum {i} has length {len(spectrum)}."
                 )
             ax.plot(freq, scaled_abs(spectrum), color=gate_colors[i],
-                    linewidth=gated_lw, zorder=3,
+                    linewidth=gated_freq_lw, zorder=3,
                     label=f"Gated signal {i + 1}")
 
     # ------------------------------------------------------------
