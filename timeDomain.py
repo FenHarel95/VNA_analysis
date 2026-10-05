@@ -1090,6 +1090,12 @@ def plot_tof_comparison_claude(
     device2_label="Device 2",
     time_label="Time (ns)",
 
+    # Font sizes
+    label_fs=10,         # axis labels (x and y)
+    tick_fs=9,           # tick numbers (and the x10^n offset text)
+    title_fs=11,         # device titles
+    legend_fs=8,         # legends
+
     # Layout
     time_hspace=0.12,    # gap between row 1 and row 2
 
@@ -1116,6 +1122,9 @@ def plot_tof_comparison_claude(
     gated_t*, gates_t*, gated_f* : lists with 0, 1 or 2 arrays.
     freq_raw*, raw_f* : original frequency axis and original S trace
         (optional). Plotted in grey behind the gated spectra in row 3.
+    label_fs, tick_fs, title_fs, legend_fs : float
+        Font sizes (pt) for axis labels, tick numbers, device titles
+        and legends.
     time_hspace : float
         Vertical gap between rows 1 and 2 (fraction of axis height).
     """
@@ -1173,7 +1182,7 @@ def plot_tof_comparison_claude(
 
     def setup_axis(ax):
         ax.tick_params(direction="in", which="both",
-                       top=True, right=True, labelsize=9)
+                       top=True, right=True, labelsize=tick_fs)
         ax.minorticks_on()
         ax.tick_params(which="minor", length=3)
         ax.tick_params(which="major", length=5)
@@ -1202,6 +1211,8 @@ def plot_tof_comparison_claude(
         formatter = ScalarFormatter(useMathText=True)
         formatter.set_powerlimits((-2, 2))
         ax.yaxis.set_major_formatter(formatter)
+        # the "x10^n" offset text at the top of the y axis
+        ax.yaxis.get_offset_text().set_fontsize(tick_fs)
 
     def plot_raw(ax, f_raw, s_raw, device_name):
         """Grey background trace with the original frequency data."""
@@ -1265,11 +1276,11 @@ def plot_tof_comparison_claude(
     for i, gate in enumerate(gates_t2[:2]):
         add_gate_to_axis(ax12, t2, gate, gate_colors[i], f"Gate {i + 1}")
 
-    ax11.set_title(device1_label, fontsize=11)
-    ax12.set_title(device2_label, fontsize=11)
+    ax11.set_title(device1_label, fontsize=title_fs)
+    ax12.set_title(device2_label, fontsize=title_fs)
 
-    ax11.legend(loc="best", fontsize=8, frameon=False)
-    ax12.legend(loc="best", fontsize=8, frameon=False)
+    ax11.legend(loc="best", fontsize=legend_fs, frameon=False)
+    ax12.legend(loc="best", fontsize=legend_fs, frameon=False)
 
     # ------------------------------------------------------------
     # ROW 2: gated time-domain signals
@@ -1287,13 +1298,13 @@ def plot_tof_comparison_claude(
                   linewidth=1.3, label=f"Gated signal {i + 1}")
 
     if len(gated_t1) > 0:
-        ax21.legend(loc="best", fontsize=8, frameon=False)
+        ax21.legend(loc="best", fontsize=legend_fs, frameon=False)
     if len(gated_t2) > 0:
-        ax22.legend(loc="best", fontsize=8, frameon=False)
+        ax22.legend(loc="best", fontsize=legend_fs, frameon=False)
 
     # Shared time axis: label only on the bottom panel of the block
-    ax21.set_xlabel(time_label, fontsize=10)
-    ax22.set_xlabel(time_label, fontsize=10)
+    ax21.set_xlabel(time_label, fontsize=label_fs)
+    ax22.set_xlabel(time_label, fontsize=label_fs)
 
     # ------------------------------------------------------------
     # ROW 3: raw data (grey, background) + reconstructed spectra
@@ -1327,20 +1338,20 @@ def plot_tof_comparison_claude(
         ax32.plot(freq2, scaled_abs(spectrum), color=gate_colors[i],
                   linewidth=1.3, zorder=3, label=f"Gated signal {i + 1}")
 
-    ax31.set_xlabel("Frequency (GHz)", fontsize=10)
-    ax32.set_xlabel("Frequency (GHz)", fontsize=10)
+    ax31.set_xlabel("Frequency (GHz)", fontsize=label_fs)
+    ax32.set_xlabel("Frequency (GHz)", fontsize=label_fs)
 
     if has_raw1 or len(gated_f1) > 0:
-        ax31.legend(loc="best", fontsize=8, frameon=False)
+        ax31.legend(loc="best", fontsize=legend_fs, frameon=False)
     if has_raw2 or len(gated_f2) > 0:
-        ax32.legend(loc="best", fontsize=8, frameon=False)
+        ax32.legend(loc="best", fontsize=legend_fs, frameon=False)
 
     # ------------------------------------------------------------
     # Y labels: left column only
     # ------------------------------------------------------------
-    ax11.set_ylabel(ylabel_row1, fontsize=10)
-    ax21.set_ylabel(ylabel_row2, fontsize=10)
-    ax31.set_ylabel(ylabel_row3, fontsize=10)
+    ax11.set_ylabel(ylabel_row1, fontsize=label_fs)
+    ax21.set_ylabel(ylabel_row2, fontsize=label_fs)
+    ax31.set_ylabel(ylabel_row3, fontsize=label_fs)
 
     # ------------------------------------------------------------
     # Axis limits
@@ -1386,6 +1397,7 @@ def plot_tof_comparison_claude(
 
     return fig, axes
 
+
 def plot_tof_comparison_2row(
     # Device 1
     t1,
@@ -1430,6 +1442,12 @@ def plot_tof_comparison_2row(
     gated_lw=1.3,        # thickness of the gated traces (on top)
     raw_lw=3.5,          # thickness of the raw frequency data
 
+    # Font sizes
+    label_fs=10,         # axis labels (x and y)
+    tick_fs=9,           # tick numbers (and the x10^n offset text)
+    title_fs=11,         # device titles
+    legend_fs=8,         # legends
+
     # Layout
     row_hspace=0.28,     # gap between row 1 and row 2
 
@@ -1455,6 +1473,9 @@ def plot_tof_comparison_2row(
     gated_t*, gates_t*, gated_f* : lists with 0, 1 or 2 arrays.
     freq_raw*, raw_f* : original frequency axis and original S trace
         (optional). Plotted behind the gated spectra in row 2.
+    label_fs, tick_fs, title_fs, legend_fs : float
+        Font sizes (pt) for axis labels, tick numbers, device titles
+        and legends.
     """
 
     import numpy as np
@@ -1510,7 +1531,7 @@ def plot_tof_comparison_2row(
 
     def setup_axis(ax):
         ax.tick_params(direction="in", which="both",
-                       top=True, right=True, labelsize=9)
+                       top=True, right=True, labelsize=tick_fs)
         ax.minorticks_on()
         ax.tick_params(which="minor", length=3)
         ax.tick_params(which="major", length=5)
@@ -1519,6 +1540,8 @@ def plot_tof_comparison_2row(
         formatter = ScalarFormatter(useMathText=True)
         formatter.set_powerlimits((-2, 2))
         ax.yaxis.set_major_formatter(formatter)
+        # the "x10^n" offset text at the top of the y axis
+        ax.yaxis.get_offset_text().set_fontsize(tick_fs)
 
     def add_gate_region(ax, t, gate, color):
         """Shaded gate region and dashed boundaries (no legend entry)."""
@@ -1612,14 +1635,14 @@ def plot_tof_comparison_2row(
     plot_original_ft(ax11, t1, signal_t1, gates_t1, gated_t1)
     plot_original_ft(ax12, t2, signal_t2, gates_t2, gated_t2)
 
-    ax11.set_title(device1_label, fontsize=11)
-    ax12.set_title(device2_label, fontsize=11)
+    ax11.set_title(device1_label, fontsize=title_fs)
+    ax12.set_title(device2_label, fontsize=title_fs)
 
-    ax11.set_xlabel(time_label, fontsize=10)
-    ax12.set_xlabel(time_label, fontsize=10)
+    ax11.set_xlabel(time_label, fontsize=label_fs)
+    ax12.set_xlabel(time_label, fontsize=label_fs)
 
-    ax11.legend(loc="best", fontsize=8, frameon=False)
-    ax12.legend(loc="best", fontsize=8, frameon=False)
+    ax11.legend(loc="best", fontsize=legend_fs, frameon=False)
+    ax12.legend(loc="best", fontsize=legend_fs, frameon=False)
 
     # ------------------------------------------------------------
     # ROW 2: raw data + reconstructed spectra
@@ -1630,19 +1653,19 @@ def plot_tof_comparison_2row(
     plot_gated_spectra(ax21, freq1, gated_f1, "Device 1")
     plot_gated_spectra(ax22, freq2, gated_f2, "Device 2")
 
-    ax21.set_xlabel("Frequency (GHz)", fontsize=10)
-    ax22.set_xlabel("Frequency (GHz)", fontsize=10)
+    ax21.set_xlabel("Frequency (GHz)", fontsize=label_fs)
+    ax22.set_xlabel("Frequency (GHz)", fontsize=label_fs)
 
     if has_raw1 or len(gated_f1) > 0:
-        ax21.legend(loc="best", fontsize=8, frameon=False)
+        ax21.legend(loc="best", fontsize=legend_fs, frameon=False)
     if has_raw2 or len(gated_f2) > 0:
-        ax22.legend(loc="best", fontsize=8, frameon=False)
+        ax22.legend(loc="best", fontsize=legend_fs, frameon=False)
 
     # ------------------------------------------------------------
     # Y labels: left column only
     # ------------------------------------------------------------
-    ax11.set_ylabel(ylabel_row1, fontsize=10)
-    ax21.set_ylabel(ylabel_row2, fontsize=10)
+    ax11.set_ylabel(ylabel_row1, fontsize=label_fs)
+    ax21.set_ylabel(ylabel_row2, fontsize=label_fs)
 
     # ------------------------------------------------------------
     # Axis limits
