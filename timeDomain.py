@@ -1050,6 +1050,7 @@ def plot_tof_comparison(
 
     return fig, axes
 
+
 def plot_tof_comparison_claude(
     # Device 1
     t1,
@@ -1058,6 +1059,8 @@ def plot_tof_comparison_claude(
     gates_t1=None,
     freq1=None,
     gated_f1=None,
+    freq_raw1=None,      # original frequency axis (Device 1)
+    raw_f1=None,         # original S trace (Device 1)
 
     # Device 2
     t2=None,
@@ -1066,6 +1069,8 @@ def plot_tof_comparison_claude(
     gates_t2=None,
     freq2=None,
     gated_f2=None,
+    freq_raw2=None,      # original frequency axis (Device 2)
+    raw_f2=None,         # original S trace (Device 2)
 
     # X limits
     time_xlim=None,
@@ -1085,6 +1090,9 @@ def plot_tof_comparison_claude(
     device2_label="Device 2",
     time_label="Time (ns)",
 
+    # Layout
+    time_hspace=0.12,    # gap between row 1 and row 2
+
     # Saving
     save_path=None,
 
@@ -1097,7 +1105,8 @@ def plot_tof_comparison_claude(
     Layout (columns: Device 1 | Device 2):
         Row 1: Original time-domain FT + gate regions   \  share one
         Row 2: Gated time-domain signals                /  time axis
-        Row 3: Frequency-domain spectra after gating
+        Row 3: Raw frequency-domain data (grey, background) with the
+               gated, reconstructed spectra on top
 
     y_scale : float
         Plotted quantity is |signal| / y_scale (e.g. 1e-3 -> label x10^3).
@@ -1105,12 +1114,16 @@ def plot_tof_comparison_claude(
         Independent y limits per device. The same time_ylim is used for
         rows 1 and 2 of a given device.
     gated_t*, gates_t*, gated_f* : lists with 0, 1 or 2 arrays.
+    freq_raw*, raw_f* : original frequency axis and original S trace
+        (optional). Plotted in grey behind the gated spectra in row 3.
+    time_hspace : float
+        Vertical gap between rows 1 and 2 (fraction of axis height).
     """
 
     import numpy as np
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
-    from matplotlib.ticker import ScalarFormatter, MaxNLocator
+    from matplotlib.ticker import ScalarFormatter
 
     # ------------------------------------------------------------
     # Defaults
@@ -1130,6 +1143,7 @@ def plot_tof_comparison_claude(
     # ------------------------------------------------------------
     original_color = "#3A506B"
     gate_colors = ["#0072B2", "#D55E00"]
+    raw_color = "#B4B4B4"   # light grey for the background trace
 
     # ------------------------------------------------------------
     # Scaling
@@ -1181,6 +1195,24 @@ def plot_tof_comparison_claude(
         formatter.set_powerlimits((-2, 2))
         ax.yaxis.set_major_formatter(formatter)
 
+    def plot_raw(ax, f_raw, s_raw, device_name):
+        """Grey background trace with the original frequency data."""
+        if s_raw is None or len(s_raw) == 0:
+            return False
+        if f_raw is None:
+            raise ValueError(
+                f"{device_name}: the raw frequency axis must be provided "
+                f"when the raw trace is used."
+            )
+        if len(f_raw) != len(s_raw):
+            raise ValueError(
+                f"{device_name}: raw frequency axis has length {len(f_raw)}, "
+                f"but raw trace has length {len(s_raw)}."
+            )
+        ax.plot(f_raw, scaled_abs(s_raw), color=raw_color,
+                linewidth=3, zorder=1, label="Raw data")
+        return True
+
     # ------------------------------------------------------------
     # Figure and grid
     # ------------------------------------------------------------
@@ -1194,11 +1226,11 @@ def plot_tof_comparison_claude(
         wspace=0.22, hspace=0.22,
     )
 
-    # Inner grids for the time block: hspace=0 -> rows 1 and 2 touch
+    # Inner grids for the time block: small gap between rows 1 and 2
     inner_left = GridSpecFromSubplotSpec(
-        2, 1, subplot_spec=outer[0, 0], hspace=0.0)
+        2, 1, subplot_spec=outer[0, 0], hspace=time_hspace)
     inner_right = GridSpecFromSubplotSpec(
-        2, 1, subplot_spec=outer[0, 1], hspace=0.0)
+        2, 1, subplot_spec=outer[0, 1], hspace=time_hspace)
 
     ax11 = fig.add_subplot(inner_left[0])
     ax21 = fig.add_subplot(inner_left[1], sharex=ax11)
@@ -1256,8 +1288,11 @@ def plot_tof_comparison_claude(
     ax22.set_xlabel(time_label, fontsize=10)
 
     # ------------------------------------------------------------
-    # ROW 3: reconstructed frequency-domain spectra
+    # ROW 3: raw data (grey, background) + reconstructed spectra
     # ------------------------------------------------------------
+    has_raw1 = plot_raw(ax31, freq_raw1, raw_f1, "Device 1")
+    has_raw2 = plot_raw(ax32, freq_raw2, raw_f2, "Device 2")
+
     for i, spectrum in enumerate(gated_f1[:2]):
         if spectrum is None or len(spectrum) == 0:
             continue
@@ -1269,7 +1304,7 @@ def plot_tof_comparison_claude(
                 f"but gated_f1[{i}] has length {len(spectrum)}."
             )
         ax31.plot(freq1, scaled_abs(spectrum), color=gate_colors[i],
-                  linewidth=1.3, label=f"Gated signal {i + 1}")
+                  linewidth=1.3, zorder=3, label=f"Gated signal {i + 1}")
 
     for i, spectrum in enumerate(gated_f2[:2]):
         if spectrum is None or len(spectrum) == 0:
@@ -1282,14 +1317,14 @@ def plot_tof_comparison_claude(
                 f"but gated_f2[{i}] has length {len(spectrum)}."
             )
         ax32.plot(freq2, scaled_abs(spectrum), color=gate_colors[i],
-                  linewidth=1.3, label=f"Gated signal {i + 1}")
+                  linewidth=1.3, zorder=3, label=f"Gated signal {i + 1}")
 
     ax31.set_xlabel("Frequency (GHz)", fontsize=10)
     ax32.set_xlabel("Frequency (GHz)", fontsize=10)
 
-    if len(gated_f1) > 0:
+    if has_raw1 or len(gated_f1) > 0:
         ax31.legend(loc="best", fontsize=8, frameon=False)
-    if len(gated_f2) > 0:
+    if has_raw2 or len(gated_f2) > 0:
         ax32.legend(loc="best", fontsize=8, frameon=False)
 
     # ------------------------------------------------------------
@@ -1333,11 +1368,6 @@ def plot_tof_comparison_claude(
     # Hide x tick labels on row 1 (row 2 carries the shared axis)
     ax11.tick_params(labelbottom=False)
     ax12.tick_params(labelbottom=False)
-
-    # Avoid tick-label collisions where rows 1 and 2 touch:
-    # drop the top tick of row 2
-    for ax in (ax21, ax22):
-        ax.yaxis.set_major_locator(MaxNLocator(nbins="auto", prune="upper"))
 
     # ------------------------------------------------------------
     # Save
