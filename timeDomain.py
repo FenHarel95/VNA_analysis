@@ -1051,660 +1051,7 @@ def plot_tof_comparison(
     return fig, axes
 
 
-def plot_tof_comparison_claude(
-    # Device 1
-    t1,
-    signal_t1,
-    gated_t1=None,
-    gates_t1=None,
-    freq1=None,
-    gated_f1=None,
-    freq_raw1=None,      # original frequency axis (Device 1)
-    raw_f1=None,         # original S trace (Device 1)
 
-    # Device 2
-    t2=None,
-    signal_t2=None,
-    gated_t2=None,
-    gates_t2=None,
-    freq2=None,
-    gated_f2=None,
-    freq_raw2=None,      # original frequency axis (Device 2)
-    raw_f2=None,         # original S trace (Device 2)
-
-    # X limits
-    time_xlim=None,
-    freq_xlim=None,
-
-    # Independent Y limits
-    time_ylim1=None,
-    time_ylim2=None,
-    freq_ylim1=None,
-    freq_ylim2=None,
-
-    # Y-axis scaling
-    y_scale=1,
-
-    # Labels
-    device1_label="Device 1",
-    device2_label="Device 2",
-    time_label="Time (ns)",
-
-    # Font sizes
-    label_fs=10,         # axis labels (x and y)
-    tick_fs=9,           # tick numbers (and the x10^n offset text)
-    title_fs=11,         # device titles
-    legend_fs=8,         # legends
-
-    # Layout
-    time_hspace=0.12,    # gap between row 1 and row 2
-
-    # Saving
-    save_path=None,
-
-    # Figure
-    figsize=(7.2, 7.0),
-):
-    """
-    Publication-ready comparison plot for time-of-flight spectroscopy.
-
-    Layout (columns: Device 1 | Device 2):
-        Row 1: Original time-domain FT + gate regions   \  share one
-        Row 2: Gated time-domain signals                /  time axis
-        Row 3: Raw frequency-domain data (grey, background) with the
-               gated, reconstructed spectra on top
-
-    y_scale : float
-        Plotted quantity is |signal| / y_scale (e.g. 1e-3 -> label x10^3).
-    time_ylim1/2, freq_ylim1/2 : tuple or None
-        Independent y limits per device. The same time_ylim is used for
-        rows 1 and 2 of a given device.
-    gated_t*, gates_t*, gated_f* : lists with 0, 1 or 2 arrays.
-    freq_raw*, raw_f* : original frequency axis and original S trace
-        (optional). Plotted in grey behind the gated spectra in row 3.
-    label_fs, tick_fs, title_fs, legend_fs : float
-        Font sizes (pt) for axis labels, tick numbers, device titles
-        and legends.
-    time_hspace : float
-        Vertical gap between rows 1 and 2 (fraction of axis height).
-    """
-
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
-    from matplotlib.ticker import ScalarFormatter
-
-    # ------------------------------------------------------------
-    # Defaults
-    # ------------------------------------------------------------
-    gated_t1 = [] if gated_t1 is None else gated_t1
-    gated_t2 = [] if gated_t2 is None else gated_t2
-    gates_t1 = [] if gates_t1 is None else gates_t1
-    gates_t2 = [] if gates_t2 is None else gates_t2
-    gated_f1 = [] if gated_f1 is None else gated_f1
-    gated_f2 = [] if gated_f2 is None else gated_f2
-
-    if t2 is None or signal_t2 is None:
-        raise ValueError("t2 and signal_t2 must be provided for Device 2.")
-
-    # ------------------------------------------------------------
-    # Colors
-    # ------------------------------------------------------------
-    original_color = "#3A506B"
-    gate_colors = ["#0072B2", "#D55E00"]
-    raw_color = "#D9A044"#"#909090"#"#B4B4B4"   # light grey for the background trace
-
-    # ------------------------------------------------------------
-    # Scaling
-    # ------------------------------------------------------------
-    if y_scale <= 0:
-        raise ValueError("y_scale must be positive.")
-
-    if not np.isclose(y_scale, 1):
-        exponent = int(np.round(-np.log10(y_scale)))
-        scale_suffix = rf"(\times 10^{{{-exponent}}} U)"
-    else:
-        scale_suffix = ""
-
-    def make_ylabel(core):
-        """Build a mathtext y label, appending the scale factor if any."""
-        return rf"$|{core}|{scale_suffix}$"
-
-    ylabel_row1 = make_ylabel(r"\mathcal{FT}\;[S_{21}]")
-    ylabel_row2 = make_ylabel(r"\mathcal{FT}\;[S_{21}]")
-    ylabel_row3 = make_ylabel(r"S_{21}")
-
-    # ------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------
-    def scaled_abs(signal):
-        return np.abs(signal) / y_scale
-
-    def setup_axis(ax):
-        ax.tick_params(direction="in", which="both",
-                       top=True, right=True, labelsize=tick_fs)
-        ax.minorticks_on()
-        ax.tick_params(which="minor", length=3)
-        ax.tick_params(which="major", length=5)
-
-    def add_gate_to_axis(ax, t, gate, color, label):
-        gate = np.asarray(gate)
-        if len(gate) == 0:
-            return
-        active = np.where(gate > 1e-6)[0]
-        if len(active) == 0:
-            return
-
-        t_start = t[active[0]]
-        t_stop = t[active[-1]]
-
-        ax.axvspan(t_start, t_stop, color=color, alpha=0.12, lw=0)
-        for edge in (t_start, t_stop):
-            ax.axvline(edge, color=color, linestyle="--",
-                       linewidth=0.9, alpha=0.8)
-
-        # Dummy line for legend
-        ax.plot([], [], color=color, linestyle="--",
-                linewidth=1.2, label=label)
-
-    def format_scientific_axis(ax):
-        formatter = ScalarFormatter(useMathText=True)
-        formatter.set_powerlimits((-2, 2))
-        ax.yaxis.set_major_formatter(formatter)
-        # the "x10^n" offset text at the top of the y axis
-        ax.yaxis.get_offset_text().set_fontsize(tick_fs)
-
-    def plot_raw(ax, f_raw, s_raw, device_name):
-        """Grey background trace with the original frequency data."""
-        if s_raw is None or len(s_raw) == 0:
-            return False
-        if f_raw is None:
-            raise ValueError(
-                f"{device_name}: the raw frequency axis must be provided "
-                f"when the raw trace is used."
-            )
-        if len(f_raw) != len(s_raw):
-            raise ValueError(
-                f"{device_name}: raw frequency axis has length {len(f_raw)}, "
-                f"but raw trace has length {len(s_raw)}."
-            )
-        ax.plot(f_raw, scaled_abs(s_raw), color=raw_color,
-                linewidth=3.5, zorder=1, label="Raw data")
-        return True
-
-    # ------------------------------------------------------------
-    # Figure and grid
-    # ------------------------------------------------------------
-    fig = plt.figure(figsize=figsize)
-
-    # Outer grid: [time block (rows 1+2)] / [frequency row (row 3)]
-    outer = GridSpec(
-        2, 2, figure=fig,
-        height_ratios=[2.0, 1.0],
-        left=0.11, right=0.98, bottom=0.08, top=0.95,
-        wspace=0.22, hspace=0.22,
-    )
-
-    # Inner grids for the time block: small gap between rows 1 and 2
-    inner_left = GridSpecFromSubplotSpec(
-        2, 1, subplot_spec=outer[0, 0], hspace=time_hspace)
-    inner_right = GridSpecFromSubplotSpec(
-        2, 1, subplot_spec=outer[0, 1], hspace=time_hspace)
-
-    ax11 = fig.add_subplot(inner_left[0])
-    ax21 = fig.add_subplot(inner_left[1], sharex=ax11)
-
-    ax12 = fig.add_subplot(inner_right[0])
-    ax22 = fig.add_subplot(inner_right[1], sharex=ax12)
-
-    ax31 = fig.add_subplot(outer[1, 0])
-    ax32 = fig.add_subplot(outer[1, 1])
-
-    axes = np.array([[ax11, ax12], [ax21, ax22], [ax31, ax32]])
-
-    # ------------------------------------------------------------
-    # ROW 1: original time-domain FT + gates
-    # ------------------------------------------------------------
-    ax11.plot(t1, scaled_abs(signal_t1), color=original_color,
-              linewidth=1.3, label="Original FT")
-    ax12.plot(t2, scaled_abs(signal_t2), color=original_color,
-              linewidth=1.3, label="Original FT")
-
-    for i, gate in enumerate(gates_t1[:2]):
-        add_gate_to_axis(ax11, t1, gate, gate_colors[i], f"Gate {i + 1}")
-
-    for i, gate in enumerate(gates_t2[:2]):
-        add_gate_to_axis(ax12, t2, gate, gate_colors[i], f"Gate {i + 1}")
-
-    ax11.set_title(device1_label, fontsize=title_fs)
-    ax12.set_title(device2_label, fontsize=title_fs)
-
-    ax11.legend(loc="best", fontsize=legend_fs, frameon=False)
-    ax12.legend(loc="best", fontsize=legend_fs, frameon=False)
-
-    # ------------------------------------------------------------
-    # ROW 2: gated time-domain signals
-    # ------------------------------------------------------------
-    for i, signal in enumerate(gated_t1[:2]):
-        if signal is None or len(signal) == 0:
-            continue
-        ax21.plot(t1, scaled_abs(signal), color=gate_colors[i],
-                  linewidth=1.3, label=f"Gated signal {i + 1}")
-
-    for i, signal in enumerate(gated_t2[:2]):
-        if signal is None or len(signal) == 0:
-            continue
-        ax22.plot(t2, scaled_abs(signal), color=gate_colors[i],
-                  linewidth=1.3, label=f"Gated signal {i + 1}")
-
-    if len(gated_t1) > 0:
-        ax21.legend(loc="best", fontsize=legend_fs, frameon=False)
-    if len(gated_t2) > 0:
-        ax22.legend(loc="best", fontsize=legend_fs, frameon=False)
-
-    # Shared time axis: label only on the bottom panel of the block
-    ax21.set_xlabel(time_label, fontsize=label_fs)
-    ax22.set_xlabel(time_label, fontsize=label_fs)
-
-    # ------------------------------------------------------------
-    # ROW 3: raw data (grey, background) + reconstructed spectra
-    # ------------------------------------------------------------
-    has_raw1 = plot_raw(ax31, freq_raw1, raw_f1, "Device 1")
-    has_raw2 = plot_raw(ax32, freq_raw2, raw_f2, "Device 2")
-
-    for i, spectrum in enumerate(gated_f1[:2]):
-        if spectrum is None or len(spectrum) == 0:
-            continue
-        if freq1 is None:
-            raise ValueError("freq1 must be provided when gated_f1 is used.")
-        if len(freq1) != len(spectrum):
-            raise ValueError(
-                f"Device 1: freq1 has length {len(freq1)}, "
-                f"but gated_f1[{i}] has length {len(spectrum)}."
-            )
-        ax31.plot(freq1, scaled_abs(spectrum), color=gate_colors[i],
-                  linewidth=1.3, zorder=3, label=f"Gated signal {i + 1}")
-
-    for i, spectrum in enumerate(gated_f2[:2]):
-        if spectrum is None or len(spectrum) == 0:
-            continue
-        if freq2 is None:
-            raise ValueError("freq2 must be provided when gated_f2 is used.")
-        if len(freq2) != len(spectrum):
-            raise ValueError(
-                f"Device 2: freq2 has length {len(freq2)}, "
-                f"but gated_f2[{i}] has length {len(spectrum)}."
-            )
-        ax32.plot(freq2, scaled_abs(spectrum), color=gate_colors[i],
-                  linewidth=1.3, zorder=3, label=f"Gated signal {i + 1}")
-
-    ax31.set_xlabel("Frequency (GHz)", fontsize=label_fs)
-    ax32.set_xlabel("Frequency (GHz)", fontsize=label_fs)
-
-    if has_raw1 or len(gated_f1) > 0:
-        ax31.legend(loc="best", fontsize=legend_fs, frameon=False)
-    if has_raw2 or len(gated_f2) > 0:
-        ax32.legend(loc="best", fontsize=legend_fs, frameon=False)
-
-    # ------------------------------------------------------------
-    # Y labels: left column only
-    # ------------------------------------------------------------
-    ax11.set_ylabel(ylabel_row1, fontsize=label_fs)
-    ax21.set_ylabel(ylabel_row2, fontsize=label_fs)
-    ax31.set_ylabel(ylabel_row3, fontsize=label_fs)
-
-    # ------------------------------------------------------------
-    # Axis limits
-    # ------------------------------------------------------------
-    if time_xlim is not None:
-        ax11.set_xlim(time_xlim)   # ax21 follows (shared)
-        ax12.set_xlim(time_xlim)   # ax22 follows (shared)
-
-    if freq_xlim is not None:
-        ax31.set_xlim(freq_xlim)
-        ax32.set_xlim(freq_xlim)
-
-    if time_ylim1 is not None:
-        ax11.set_ylim(time_ylim1)
-        ax21.set_ylim(time_ylim1)
-
-    if time_ylim2 is not None:
-        ax12.set_ylim(time_ylim2)
-        ax22.set_ylim(time_ylim2)
-
-    if freq_ylim1 is not None:
-        ax31.set_ylim(freq_ylim1)
-
-    if freq_ylim2 is not None:
-        ax32.set_ylim(freq_ylim2)
-
-    # ------------------------------------------------------------
-    # Axis formatting
-    # ------------------------------------------------------------
-    for ax in axes.flat:
-        setup_axis(ax)
-        format_scientific_axis(ax)
-
-    # Hide x tick labels on row 1 (row 2 carries the shared axis)
-    ax11.tick_params(labelbottom=False)
-    ax12.tick_params(labelbottom=False)
-
-    # ------------------------------------------------------------
-    # Save
-    # ------------------------------------------------------------
-    if save_path is not None:
-        fig.savefig(save_path, bbox_inches="tight")
-
-    return fig, axes
-
-
-def plot_tof_comparison_2row(
-    # Device 1
-    t1,
-    signal_t1,
-    gated_t1=None,
-    gates_t1=None,
-    freq1=None,
-    gated_f1=None,
-    freq_raw1=None,      # original frequency axis (Device 1)
-    raw_f1=None,         # original S trace (Device 1)
-
-    # Device 2
-    t2=None,
-    signal_t2=None,
-    gated_t2=None,
-    gates_t2=None,
-    freq2=None,
-    gated_f2=None,
-    freq_raw2=None,      # original frequency axis (Device 2)
-    raw_f2=None,         # original S trace (Device 2)
-
-    # X limits
-    time_xlim=None,
-    freq_xlim=None,
-
-    # Independent Y limits
-    time_ylim1=None,
-    time_ylim2=None,
-    freq_ylim1=None,
-    freq_ylim2=None,
-
-    # Y-axis scaling
-    y_scale=1,
-
-    # Labels
-    device1_label="Device 1",
-    device2_label="Device 2",
-    time_label="Time (ns)",
-
-    # Styling
-    original_lw=3.5,     # thickness of the original FT (background)
-    gated_lw=1.3,       # thickness of the gated traces (time)
-    gated_freq_lw=1.3,  # thickness of the gated traces (freq)
-    raw_lw=3.5,          # thickness of the raw frequency data
-
-    # Font sizes
-    label_fs=10,         # axis labels (x and y)
-    tick_fs=9,           # tick numbers (and the x10^n offset text)
-    title_fs=11,         # device titles
-    legend_fs=8,         # legends
-
-    # Layout
-    row_hspace=0.28,     # gap between row 1 and row 2
-
-    # Saving
-    save_path=None,
-
-    # Figure
-    figsize=(7.2, 5.2),
-):
-    """
-    Publication-ready comparison plot for time-of-flight spectroscopy.
-
-    Layout (columns: Device 1 | Device 2):
-        Row 1: Original time-domain FT (thick, background) with the gate
-               regions and the gated signals plotted on top of it
-        Row 2: Raw frequency-domain data (thick, background) with the
-               gated, reconstructed spectra on top
-
-    y_scale : float
-        Plotted quantity is |signal| / y_scale.
-    time_ylim1/2, freq_ylim1/2 : tuple or None
-        Independent y limits per device (row 1 and row 2 respectively).
-    gated_t*, gates_t*, gated_f* : lists with 0, 1 or 2 arrays.
-    freq_raw*, raw_f* : original frequency axis and original S trace
-        (optional). Plotted behind the gated spectra in row 2.
-    label_fs, tick_fs, title_fs, legend_fs : float
-        Font sizes (pt) for axis labels, tick numbers, device titles
-        and legends.
-    """
-
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec
-    from matplotlib.ticker import ScalarFormatter
-
-    # ------------------------------------------------------------
-    # Defaults
-    # ------------------------------------------------------------
-    gated_t1 = [] if gated_t1 is None else gated_t1
-    gated_t2 = [] if gated_t2 is None else gated_t2
-    gates_t1 = [] if gates_t1 is None else gates_t1
-    gates_t2 = [] if gates_t2 is None else gates_t2
-    gated_f1 = [] if gated_f1 is None else gated_f1
-    gated_f2 = [] if gated_f2 is None else gated_f2
-
-    if t2 is None or signal_t2 is None:
-        raise ValueError("t2 and signal_t2 must be provided for Device 2.")
-
-    # ------------------------------------------------------------
-    # Colors
-    # ------------------------------------------------------------
-    # Lighter slate for the thick background FT so the dark-blue gated
-    # trace on top keeps its contrast
-    original_color = "#8FA3B8"
-    gate_colors = ["#0072B2", "#D55E00"]
-    raw_color = "#8FA3B8"#"#D9A044"
-
-    # ------------------------------------------------------------
-    # Scaling and labels
-    # ------------------------------------------------------------
-    if y_scale <= 0:
-        raise ValueError("y_scale must be positive.")
-
-    if not np.isclose(y_scale, 1):
-        exponent = int(np.round(-np.log10(y_scale)))
-        scale_suffix = rf"(\times 10^{{{-exponent}}} ;\ U)"
-    else:
-        scale_suffix = ""
-
-    def make_ylabel(core):
-        return rf"$|{core}|{scale_suffix}$"
-
-    ylabel_row1 = make_ylabel(r"\mathcal{FT}\;[S_{21}]")
-    ylabel_row2 = make_ylabel(r"S_{21}")
-
-    # ------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------
-    def scaled_abs(signal):
-        return np.abs(signal) / y_scale
-
-    def setup_axis(ax):
-        ax.tick_params(direction="in", which="both",
-                       top=True, right=True, labelsize=tick_fs)
-        ax.minorticks_on()
-        ax.tick_params(which="minor", length=3)
-        ax.tick_params(which="major", length=5)
-
-    def format_scientific_axis(ax):
-        formatter = ScalarFormatter(useMathText=True)
-        formatter.set_powerlimits((-2, 2))
-        ax.yaxis.set_major_formatter(formatter)
-        # the "x10^n" offset text at the top of the y axis
-        ax.yaxis.get_offset_text().set_fontsize(tick_fs)
-
-    def add_gate_region(ax, t, gate, color):
-        """Shaded gate region and dashed boundaries (no legend entry)."""
-        gate = np.asarray(gate)
-        if len(gate) == 0:
-            return
-        active = np.where(gate > 1e-6)[0]
-        if len(active) == 0:
-            return
-
-        t_start = t[active[0]]
-        t_stop = t[active[-1]]
-
-        ax.axvspan(t_start, t_stop, color=color, alpha=0.12, lw=0, zorder=0)
-        for edge in (t_start, t_stop):
-            ax.axvline(edge, color=color, linestyle="--",
-                       linewidth=0.9, alpha=0.8, zorder=2)
-
-    def plot_original_ft(ax, t, signal, gates, gated):
-        """Thick background FT, gate regions, and gated traces on top."""
-        ax.plot(t, scaled_abs(signal), color=original_color,
-                linewidth=original_lw, zorder=1, label="Original FT")
-
-        for i, gate in enumerate(gates[:2]):
-            add_gate_region(ax, t, gate, gate_colors[i])
-
-        for i, sig in enumerate(gated[:2]):
-            if sig is None or len(sig) == 0:
-                continue
-            ax.plot(t, scaled_abs(sig), color=gate_colors[i],
-                    linewidth=gated_lw, zorder=3,
-                    label=f"Gated signal {i + 1}")
-
-    def plot_raw(ax, f_raw, s_raw, device_name):
-        if s_raw is None or len(s_raw) == 0:
-            return False
-        if f_raw is None:
-            raise ValueError(
-                f"{device_name}: the raw frequency axis must be provided "
-                f"when the raw trace is used."
-            )
-        if len(f_raw) != len(s_raw):
-            raise ValueError(
-                f"{device_name}: raw frequency axis has length {len(f_raw)}, "
-                f"but raw trace has length {len(s_raw)}."
-            )
-        ax.plot(f_raw, scaled_abs(s_raw), color=raw_color,
-                linewidth=raw_lw, zorder=1, label="Raw data")
-        return True
-
-    def plot_gated_spectra(ax, freq, spectra, device_name):
-        for i, spectrum in enumerate(spectra[:2]):
-            if spectrum is None or len(spectrum) == 0:
-                continue
-            if freq is None:
-                raise ValueError(
-                    f"{device_name}: the frequency axis must be provided "
-                    f"when gated spectra are used."
-                )
-            if len(freq) != len(spectrum):
-                raise ValueError(
-                    f"{device_name}: frequency axis has length {len(freq)}, "
-                    f"but gated spectrum {i} has length {len(spectrum)}."
-                )
-            ax.plot(freq, scaled_abs(spectrum), color=gate_colors[i],
-                    linewidth=gated_freq_lw, zorder=3,
-                    label=f"Gated signal {i + 1}")
-
-    # ------------------------------------------------------------
-    # Figure and grid
-    # ------------------------------------------------------------
-    fig = plt.figure(figsize=figsize)
-
-    grid = GridSpec(
-        2, 2, figure=fig,
-        height_ratios=[1.3, 1.0],
-        left=0.11, right=0.98, bottom=0.09, top=0.94,
-        wspace=0.22, hspace=row_hspace,
-    )
-
-    ax11 = fig.add_subplot(grid[0, 0])
-    ax12 = fig.add_subplot(grid[0, 1])
-    ax21 = fig.add_subplot(grid[1, 0])
-    ax22 = fig.add_subplot(grid[1, 1])
-
-    axes = np.array([[ax11, ax12], [ax21, ax22]])
-
-    # ------------------------------------------------------------
-    # ROW 1: original FT + gates + gated signals
-    # ------------------------------------------------------------
-    plot_original_ft(ax11, t1, signal_t1, gates_t1, gated_t1)
-    plot_original_ft(ax12, t2, signal_t2, gates_t2, gated_t2)
-
-    ax11.set_title(device1_label, fontsize=title_fs)
-    ax12.set_title(device2_label, fontsize=title_fs)
-
-    ax11.set_xlabel(time_label, fontsize=label_fs)
-    ax12.set_xlabel(time_label, fontsize=label_fs)
-
-    ax11.legend(loc="best", fontsize=legend_fs, frameon=False)
-    ax12.legend(loc="best", fontsize=legend_fs, frameon=False)
-
-    # ------------------------------------------------------------
-    # ROW 2: raw data + reconstructed spectra
-    # ------------------------------------------------------------
-    has_raw1 = plot_raw(ax21, freq_raw1, raw_f1, "Device 1")
-    has_raw2 = plot_raw(ax22, freq_raw2, raw_f2, "Device 2")
-
-    plot_gated_spectra(ax21, freq1, gated_f1, "Device 1")
-    plot_gated_spectra(ax22, freq2, gated_f2, "Device 2")
-
-    ax21.set_xlabel("Frequency (GHz)", fontsize=label_fs)
-    ax22.set_xlabel("Frequency (GHz)", fontsize=label_fs)
-
-    if has_raw1 or len(gated_f1) > 0:
-        ax21.legend(loc="best", fontsize=legend_fs, frameon=False)
-    if has_raw2 or len(gated_f2) > 0:
-        ax22.legend(loc="best", fontsize=legend_fs, frameon=False)
-
-    # ------------------------------------------------------------
-    # Y labels: left column only
-    # ------------------------------------------------------------
-    ax11.set_ylabel(ylabel_row1, fontsize=label_fs)
-    ax21.set_ylabel(ylabel_row2, fontsize=label_fs)
-
-    # ------------------------------------------------------------
-    # Axis limits
-    # ------------------------------------------------------------
-    if time_xlim is not None:
-        ax11.set_xlim(time_xlim)
-        ax12.set_xlim(time_xlim)
-
-    if freq_xlim is not None:
-        ax21.set_xlim(freq_xlim)
-        ax22.set_xlim(freq_xlim)
-
-    if time_ylim1 is not None:
-        ax11.set_ylim(time_ylim1)
-
-    if time_ylim2 is not None:
-        ax12.set_ylim(time_ylim2)
-
-    if freq_ylim1 is not None:
-        ax21.set_ylim(freq_ylim1)
-
-    if freq_ylim2 is not None:
-        ax22.set_ylim(freq_ylim2)
-
-    # ------------------------------------------------------------
-    # Axis formatting
-    # ------------------------------------------------------------
-    for ax in axes.flat:
-        setup_axis(ax)
-        format_scientific_axis(ax)
-
-    # ------------------------------------------------------------
-    # Save
-    # ------------------------------------------------------------
-    if save_path is not None:
-        fig.savefig(save_path, bbox_inches="tight")
-
-    return fig, axes
 
 class Analysis_timeD(Analysis_PSWS):
     def __init__(self, address , file_name:str, sample:str , setup:str, geo:str, device: str, **kwargs):
@@ -2210,3 +1557,687 @@ class Analysis_timeD(Analysis_PSWS):
         )
 
         fig.show()
+
+def plot_tof_comparison_claude(
+    # Device 1
+    t1,
+    signal_t1,
+    gated_t1=None,
+    gates_t1=None,
+    freq1=None,
+    gated_f1=None,
+    freq_raw1=None,      # original frequency axis (Device 1)
+    raw_f1=None,         # original S trace (Device 1)
+
+    # Device 2
+    t2=None,
+    signal_t2=None,
+    gated_t2=None,
+    gates_t2=None,
+    freq2=None,
+    gated_f2=None,
+    freq_raw2=None,      # original frequency axis (Device 2)
+    raw_f2=None,         # original S trace (Device 2)
+
+    # X limits
+    time_xlim=None,
+    freq_xlim=None,
+
+    # Independent Y limits
+    time_ylim1=None,
+    time_ylim2=None,
+    freq_ylim1=None,
+    freq_ylim2=None,
+
+    # Y-axis scaling (independent for time and frequency rows)
+    y_scale_time=1,      # rows showing the time-domain FT
+    y_scale_freq=1,      # rows showing the frequency-domain S21
+
+    # Labels
+    device1_label="Device 1",
+    device2_label="Device 2",
+    time_label="Time (ns)",
+
+    # Font sizes
+    label_fs=10,         # axis labels (x and y)
+    tick_fs=9,           # tick numbers (and the x10^n offset text)
+    title_fs=11,         # device titles
+    legend_fs=8,         # legends
+
+    # Layout
+    time_hspace=0.12,    # gap between row 1 and row 2
+
+    # Saving
+    save_path=None,
+
+    # Figure
+    figsize=(7.2, 7.0),
+):
+    """
+    Publication-ready comparison plot for time-of-flight spectroscopy.
+
+    Layout (columns: Device 1 | Device 2):
+        Row 1: Original time-domain FT + gate regions   |  share one
+        Row 2: Gated time-domain signals                |  time axis
+        Row 3: Raw frequency-domain data (grey, background) with the
+               gated, reconstructed spectra on top
+
+    y_scale_time, y_scale_freq : float
+        Independent scale factors. Time-domain (FT) rows are plotted as
+        |signal| / y_scale_time and frequency-domain rows as
+        |signal| / y_scale_freq (e.g. 1e-3 -> label x10^{-3}).
+    time_ylim1/2, freq_ylim1/2 : tuple or None
+        Independent y limits per device. The same time_ylim is used for
+        rows 1 and 2 of a given device.
+    gated_t*, gates_t*, gated_f* : lists with 0, 1 or 2 arrays.
+    freq_raw*, raw_f* : original frequency axis and original S trace
+        (optional). Plotted in grey behind the gated spectra in row 3.
+    label_fs, tick_fs, title_fs, legend_fs : float
+        Font sizes (pt) for axis labels, tick numbers, device titles
+        and legends.
+    time_hspace : float
+        Vertical gap between rows 1 and 2 (fraction of axis height).
+    """
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+    from matplotlib.ticker import ScalarFormatter
+
+    # ------------------------------------------------------------
+    # Defaults
+    # ------------------------------------------------------------
+    gated_t1 = [] if gated_t1 is None else gated_t1
+    gated_t2 = [] if gated_t2 is None else gated_t2
+    gates_t1 = [] if gates_t1 is None else gates_t1
+    gates_t2 = [] if gates_t2 is None else gates_t2
+    gated_f1 = [] if gated_f1 is None else gated_f1
+    gated_f2 = [] if gated_f2 is None else gated_f2
+
+    if t2 is None or signal_t2 is None:
+        raise ValueError("t2 and signal_t2 must be provided for Device 2.")
+
+    # ------------------------------------------------------------
+    # Colors
+    # ------------------------------------------------------------
+    original_color = "#3A506B"
+    gate_colors = ["#0072B2", "#D55E00"]
+    raw_color = "#D9A044"#"#909090"#"#B4B4B4"   # light grey for the background trace
+
+    # ------------------------------------------------------------
+    # Scaling
+    # ------------------------------------------------------------
+    if y_scale_time <= 0 or y_scale_freq <= 0:
+        raise ValueError("y_scale_time and y_scale_freq must be positive.")
+
+    def scale_factor_str(y_scale):
+        """Mathtext '\\times 10^{n}' (n = log10(y_scale)), or '' if y_scale = 1."""
+        if np.isclose(y_scale, 1):
+            return ""
+        return rf"\times 10^{{{int(np.round(np.log10(y_scale)))}}}"
+
+    def make_ylabel(core, y_scale, unit=""):
+        """Mathtext y label: |core| (scale factor and/or unit)."""
+        parts = []
+        factor = scale_factor_str(y_scale)
+        if factor:
+            parts.append(factor)
+        if unit:
+            parts.append(rf"\mathrm{{{unit}}}")
+        sep = r"\;"
+        suffix = rf"\;({sep.join(parts)})" if parts else ""
+        return rf"$|{core}|{suffix}$"
+
+    ylabel_row1 = make_ylabel(r"\mathcal{FT}\;[S_{21}]", y_scale_time, "a.u.")
+    ylabel_row2 = make_ylabel(r"\mathcal{FT}\;[S_{21}]", y_scale_time, "a.u.")
+    ylabel_row3 = make_ylabel(r"S_{21}", y_scale_freq)
+
+    # ------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------
+    def scaled_abs_time(signal):
+        return np.abs(signal) / y_scale_time
+
+    def scaled_abs_freq(signal):
+        return np.abs(signal) / y_scale_freq
+
+    def setup_axis(ax):
+        ax.tick_params(direction="in", which="both",
+                       top=True, right=True, labelsize=tick_fs)
+        ax.minorticks_on()
+        ax.tick_params(which="minor", length=3)
+        ax.tick_params(which="major", length=5)
+
+    def add_gate_to_axis(ax, t, gate, color, label):
+        gate = np.asarray(gate)
+        if len(gate) == 0:
+            return
+        active = np.where(gate > 1e-6)[0]
+        if len(active) == 0:
+            return
+
+        t_start = t[active[0]]
+        t_stop = t[active[-1]]
+
+        ax.axvspan(t_start, t_stop, color=color, alpha=0.12, lw=0)
+        for edge in (t_start, t_stop):
+            ax.axvline(edge, color=color, linestyle="--",
+                       linewidth=0.9, alpha=0.8)
+
+        # Dummy line for legend
+        ax.plot([], [], color=color, linestyle="--",
+                linewidth=1.2, label=label)
+
+    def format_scientific_axis(ax):
+        formatter = ScalarFormatter(useMathText=True)
+        formatter.set_powerlimits((-2, 2))
+        ax.yaxis.set_major_formatter(formatter)
+        # the "x10^n" offset text at the top of the y axis
+        ax.yaxis.get_offset_text().set_fontsize(tick_fs)
+
+    def plot_raw(ax, f_raw, s_raw, device_name):
+        """Grey background trace with the original frequency data."""
+        if s_raw is None or len(s_raw) == 0:
+            return False
+        if f_raw is None:
+            raise ValueError(
+                f"{device_name}: the raw frequency axis must be provided "
+                f"when the raw trace is used."
+            )
+        if len(f_raw) != len(s_raw):
+            raise ValueError(
+                f"{device_name}: raw frequency axis has length {len(f_raw)}, "
+                f"but raw trace has length {len(s_raw)}."
+            )
+        ax.plot(f_raw, scaled_abs_freq(s_raw), color=raw_color,
+                linewidth=3.5, zorder=1, label="Raw data")
+        return True
+
+    # ------------------------------------------------------------
+    # Figure and grid
+    # ------------------------------------------------------------
+    fig = plt.figure(figsize=figsize)
+
+    # Outer grid: [time block (rows 1+2)] / [frequency row (row 3)]
+    outer = GridSpec(
+        2, 2, figure=fig,
+        height_ratios=[2.0, 1.0],
+        left=0.11, right=0.98, bottom=0.08, top=0.95,
+        wspace=0.22, hspace=0.22,
+    )
+
+    # Inner grids for the time block: small gap between rows 1 and 2
+    inner_left = GridSpecFromSubplotSpec(
+        2, 1, subplot_spec=outer[0, 0], hspace=time_hspace)
+    inner_right = GridSpecFromSubplotSpec(
+        2, 1, subplot_spec=outer[0, 1], hspace=time_hspace)
+
+    ax11 = fig.add_subplot(inner_left[0])
+    ax21 = fig.add_subplot(inner_left[1], sharex=ax11)
+
+    ax12 = fig.add_subplot(inner_right[0])
+    ax22 = fig.add_subplot(inner_right[1], sharex=ax12)
+
+    ax31 = fig.add_subplot(outer[1, 0])
+    ax32 = fig.add_subplot(outer[1, 1])
+
+    axes = np.array([[ax11, ax12], [ax21, ax22], [ax31, ax32]])
+
+    # ------------------------------------------------------------
+    # ROW 1: original time-domain FT + gates
+    # ------------------------------------------------------------
+    ax11.plot(t1, scaled_abs_time(signal_t1), color=original_color,
+              linewidth=1.3, label="Original FT")
+    ax12.plot(t2, scaled_abs_time(signal_t2), color=original_color,
+              linewidth=1.3, label="Original FT")
+
+    for i, gate in enumerate(gates_t1[:2]):
+        add_gate_to_axis(ax11, t1, gate, gate_colors[i], f"Gate {i + 1}")
+
+    for i, gate in enumerate(gates_t2[:2]):
+        add_gate_to_axis(ax12, t2, gate, gate_colors[i], f"Gate {i + 1}")
+
+    ax11.set_title(device1_label, fontsize=title_fs)
+    ax12.set_title(device2_label, fontsize=title_fs)
+
+    ax11.legend(loc="best", fontsize=legend_fs, frameon=False)
+    ax12.legend(loc="best", fontsize=legend_fs, frameon=False)
+
+    # ------------------------------------------------------------
+    # ROW 2: gated time-domain signals
+    # ------------------------------------------------------------
+    for i, signal in enumerate(gated_t1[:2]):
+        if signal is None or len(signal) == 0:
+            continue
+        ax21.plot(t1, scaled_abs_time(signal), color=gate_colors[i],
+                  linewidth=1.3, label=f"Gated signal {i + 1}")
+
+    for i, signal in enumerate(gated_t2[:2]):
+        if signal is None or len(signal) == 0:
+            continue
+        ax22.plot(t2, scaled_abs_time(signal), color=gate_colors[i],
+                  linewidth=1.3, label=f"Gated signal {i + 1}")
+
+    if len(gated_t1) > 0:
+        ax21.legend(loc="best", fontsize=legend_fs, frameon=False)
+    if len(gated_t2) > 0:
+        ax22.legend(loc="best", fontsize=legend_fs, frameon=False)
+
+    # Shared time axis: label only on the bottom panel of the block
+    ax21.set_xlabel(time_label, fontsize=label_fs)
+    ax22.set_xlabel(time_label, fontsize=label_fs)
+
+    # ------------------------------------------------------------
+    # ROW 3: raw data (grey, background) + reconstructed spectra
+    # ------------------------------------------------------------
+    has_raw1 = plot_raw(ax31, freq_raw1, raw_f1, "Device 1")
+    has_raw2 = plot_raw(ax32, freq_raw2, raw_f2, "Device 2")
+
+    for i, spectrum in enumerate(gated_f1[:2]):
+        if spectrum is None or len(spectrum) == 0:
+            continue
+        if freq1 is None:
+            raise ValueError("freq1 must be provided when gated_f1 is used.")
+        if len(freq1) != len(spectrum):
+            raise ValueError(
+                f"Device 1: freq1 has length {len(freq1)}, "
+                f"but gated_f1[{i}] has length {len(spectrum)}."
+            )
+        ax31.plot(freq1, scaled_abs_freq(spectrum), color=gate_colors[i],
+                  linewidth=1.3, zorder=3, label=f"Gated signal {i + 1}")
+
+    for i, spectrum in enumerate(gated_f2[:2]):
+        if spectrum is None or len(spectrum) == 0:
+            continue
+        if freq2 is None:
+            raise ValueError("freq2 must be provided when gated_f2 is used.")
+        if len(freq2) != len(spectrum):
+            raise ValueError(
+                f"Device 2: freq2 has length {len(freq2)}, "
+                f"but gated_f2[{i}] has length {len(spectrum)}."
+            )
+        ax32.plot(freq2, scaled_abs_freq(spectrum), color=gate_colors[i],
+                  linewidth=1.3, zorder=3, label=f"Gated signal {i + 1}")
+
+    ax31.set_xlabel("Frequency (GHz)", fontsize=label_fs)
+    ax32.set_xlabel("Frequency (GHz)", fontsize=label_fs)
+
+    if has_raw1 or len(gated_f1) > 0:
+        ax31.legend(loc="best", fontsize=legend_fs, frameon=False)
+    if has_raw2 or len(gated_f2) > 0:
+        ax32.legend(loc="best", fontsize=legend_fs, frameon=False)
+
+    # ------------------------------------------------------------
+    # Y labels: left column only
+    # ------------------------------------------------------------
+    ax11.set_ylabel(ylabel_row1, fontsize=label_fs)
+    ax21.set_ylabel(ylabel_row2, fontsize=label_fs)
+    ax31.set_ylabel(ylabel_row3, fontsize=label_fs)
+
+    # ------------------------------------------------------------
+    # Axis limits
+    # ------------------------------------------------------------
+    if time_xlim is not None:
+        ax11.set_xlim(time_xlim)   # ax21 follows (shared)
+        ax12.set_xlim(time_xlim)   # ax22 follows (shared)
+
+    if freq_xlim is not None:
+        ax31.set_xlim(freq_xlim)
+        ax32.set_xlim(freq_xlim)
+
+    if time_ylim1 is not None:
+        ax11.set_ylim(time_ylim1)
+        ax21.set_ylim(time_ylim1)
+
+    if time_ylim2 is not None:
+        ax12.set_ylim(time_ylim2)
+        ax22.set_ylim(time_ylim2)
+
+    if freq_ylim1 is not None:
+        ax31.set_ylim(freq_ylim1)
+
+    if freq_ylim2 is not None:
+        ax32.set_ylim(freq_ylim2)
+
+    # ------------------------------------------------------------
+    # Axis formatting
+    # ------------------------------------------------------------
+    for ax in axes.flat:
+        setup_axis(ax)
+        format_scientific_axis(ax)
+
+    # Hide x tick labels on row 1 (row 2 carries the shared axis)
+    ax11.tick_params(labelbottom=False)
+    ax12.tick_params(labelbottom=False)
+
+    # ------------------------------------------------------------
+    # Save
+    # ------------------------------------------------------------
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight")
+
+    return fig, axes
+
+
+def plot_tof_comparison_2row(
+    # Device 1
+    t1,
+    signal_t1,
+    gated_t1=None,
+    gates_t1=None,
+    freq1=None,
+    gated_f1=None,
+    freq_raw1=None,      # original frequency axis (Device 1)
+    raw_f1=None,         # original S trace (Device 1)
+
+    # Device 2
+    t2=None,
+    signal_t2=None,
+    gated_t2=None,
+    gates_t2=None,
+    freq2=None,
+    gated_f2=None,
+    freq_raw2=None,      # original frequency axis (Device 2)
+    raw_f2=None,         # original S trace (Device 2)
+
+    # X limits
+    time_xlim=None,
+    freq_xlim=None,
+
+    # Independent Y limits
+    time_ylim1=None,
+    time_ylim2=None,
+    freq_ylim1=None,
+    freq_ylim2=None,
+
+    # Y-axis scaling (independent for time and frequency rows)
+    y_scale_time=1,      # rows showing the time-domain FT
+    y_scale_freq=1,      # rows showing the frequency-domain S21
+
+    # Labels
+    device1_label="Device 1",
+    device2_label="Device 2",
+    time_label="Time (ns)",
+
+    # Styling
+    original_lw=3.5,     # thickness of the original FT (background)
+    gated_lw=1.3,        # thickness of the gated traces (on top)
+    gated_freq_lw=1.3,  # thickness of the gated traces (freq)
+    raw_lw=3.5,          # thickness of the raw frequency data
+
+    # Font sizes
+    label_fs=10,         # axis labels (x and y)
+    tick_fs=9,           # tick numbers (and the x10^n offset text)
+    title_fs=11,         # device titles
+    legend_fs=8,         # legends
+
+    # Layout
+    row_hspace=0.28,     # gap between row 1 and row 2
+
+    # Saving
+    save_path=None,
+
+    # Figure
+    figsize=(7.2, 5.2),
+):
+    """
+    Publication-ready comparison plot for time-of-flight spectroscopy.
+
+    Layout (columns: Device 1 | Device 2):
+        Row 1: Original time-domain FT (thick, background) with the gate
+               regions and the gated signals plotted on top of it
+        Row 2: Raw frequency-domain data (thick, background) with the
+               gated, reconstructed spectra on top
+
+    y_scale_time, y_scale_freq : float
+        Independent scale factors. Time-domain (FT) row is plotted as
+        |signal| / y_scale_time and the frequency-domain row as
+        |signal| / y_scale_freq (e.g. 1e-3 -> label x10^{-3}).
+    time_ylim1/2, freq_ylim1/2 : tuple or None
+        Independent y limits per device (row 1 and row 2 respectively).
+    gated_t*, gates_t*, gated_f* : lists with 0, 1 or 2 arrays.
+    freq_raw*, raw_f* : original frequency axis and original S trace
+        (optional). Plotted behind the gated spectra in row 2.
+    label_fs, tick_fs, title_fs, legend_fs : float
+        Font sizes (pt) for axis labels, tick numbers, device titles
+        and legends.
+    """
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    from matplotlib.ticker import ScalarFormatter
+
+    # ------------------------------------------------------------
+    # Defaults
+    # ------------------------------------------------------------
+    gated_t1 = [] if gated_t1 is None else gated_t1
+    gated_t2 = [] if gated_t2 is None else gated_t2
+    gates_t1 = [] if gates_t1 is None else gates_t1
+    gates_t2 = [] if gates_t2 is None else gates_t2
+    gated_f1 = [] if gated_f1 is None else gated_f1
+    gated_f2 = [] if gated_f2 is None else gated_f2
+
+    if t2 is None or signal_t2 is None:
+        raise ValueError("t2 and signal_t2 must be provided for Device 2.")
+
+    # ------------------------------------------------------------
+    # Colors
+    # ------------------------------------------------------------
+    # Lighter slate for the thick background FT so the dark-blue gated
+    # trace on top keeps its contrast
+    original_color = "#8FA3B8"
+    gate_colors = ["#0072B2","#FE00F2"]#["#0072B2", "#D55E00"] #"#00CC96" greenish
+    raw_color = "#D9A044"
+
+    # ------------------------------------------------------------
+    # Scaling and labels
+    # ------------------------------------------------------------
+    if y_scale_time <= 0 or y_scale_freq <= 0:
+        raise ValueError("y_scale_time and y_scale_freq must be positive.")
+
+    def scale_factor_str(y_scale):
+        """Mathtext '\\times 10^{n}' (n = log10(y_scale)), or '' if y_scale = 1."""
+        if np.isclose(y_scale, 1):
+            return ""
+        return rf"\times 10^{{{int(np.round(np.log10(y_scale)))}}}"
+
+    def make_ylabel(core, y_scale, unit=""):
+        """Mathtext y label: |core| (scale factor and/or unit)."""
+        parts = []
+        factor = scale_factor_str(y_scale)
+        if factor:
+            parts.append(factor)
+        if unit:
+            parts.append(rf"\mathrm{{{unit}}}")
+        sep = r"\;"
+        suffix = rf"\;({sep.join(parts)})" if parts else ""
+        return rf"$|{core}|{suffix}$"
+
+    ylabel_row1 = make_ylabel(r"\mathcal{FT}\;[\Delta S_{21}]", 1, "a.u.")
+    ylabel_row2 = make_ylabel(r"\Delta S_{21}", y_scale_freq, "U")
+
+    # ------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------
+    def scaled_abs_time(signal):
+        return np.abs(signal) / y_scale_time
+
+    def scaled_abs_freq(signal):
+        return np.abs(signal) / y_scale_freq
+
+    def setup_axis(ax):
+        ax.tick_params(direction="in", which="both",
+                       top=True, right=True, labelsize=tick_fs)
+        ax.minorticks_on()
+        ax.tick_params(which="minor", length=3)
+        ax.tick_params(which="major", length=5)
+
+    def format_scientific_axis(ax):
+        formatter = ScalarFormatter(useMathText=True)
+        formatter.set_powerlimits((-2, 2))
+        ax.yaxis.set_major_formatter(formatter)
+        # the "x10^n" offset text at the top of the y axis
+        ax.yaxis.get_offset_text().set_fontsize(tick_fs)
+
+    def add_gate_region(ax, t, gate, color):
+        """Shaded gate region and dashed boundaries (no legend entry)."""
+        gate = np.asarray(gate)
+        if len(gate) == 0:
+            return
+        active = np.where(gate > 1e-6)[0]
+        if len(active) == 0:
+            return
+
+        t_start = t[active[0]]
+        t_stop = t[active[-1]]
+
+        ax.axvspan(t_start, t_stop, color=color, alpha=0.12, lw=0, zorder=0)
+        for edge in (t_start, t_stop):
+            ax.axvline(edge, color=color, linestyle="--",
+                       linewidth=0.9, alpha=0.8, zorder=2)
+
+    def plot_original_ft(ax, t, signal, gates, gated):
+        """Thick background FT, gate regions, and gated traces on top."""
+        ax.plot(t, scaled_abs_time(signal), color=original_color,
+                linewidth=original_lw, zorder=1, label="Original FT")
+
+        for i, gate in enumerate(gates[:2]):
+            add_gate_region(ax, t, gate, gate_colors[i])
+
+        for i, sig in enumerate(gated[:2]):
+            if sig is None or len(sig) == 0:
+                continue
+            ax.plot(t, scaled_abs_time(sig), color=gate_colors[i],
+                    linewidth=gated_lw, zorder=3,
+                    label=f"Gated signal {i + 1}")
+
+    def plot_raw(ax, f_raw, s_raw, device_name):
+        if s_raw is None or len(s_raw) == 0:
+            return False
+        if f_raw is None:
+            raise ValueError(
+                f"{device_name}: the raw frequency axis must be provided "
+                f"when the raw trace is used."
+            )
+        if len(f_raw) != len(s_raw):
+            raise ValueError(
+                f"{device_name}: raw frequency axis has length {len(f_raw)}, "
+                f"but raw trace has length {len(s_raw)}."
+            )
+        ax.plot(f_raw, scaled_abs_freq(s_raw), color=raw_color,
+                linewidth=raw_lw, zorder=1, label="Raw data")
+        return True
+
+    def plot_gated_spectra(ax, freq, spectra, device_name):
+        for i, spectrum in enumerate(spectra[:2]):
+            if spectrum is None or len(spectrum) == 0:
+                continue
+            if freq is None:
+                raise ValueError(
+                    f"{device_name}: the frequency axis must be provided "
+                    f"when gated spectra are used."
+                )
+            if len(freq) != len(spectrum):
+                raise ValueError(
+                    f"{device_name}: frequency axis has length {len(freq)}, "
+                    f"but gated spectrum {i} has length {len(spectrum)}."
+                )
+            ax.plot(freq, scaled_abs_freq(spectrum), color=gate_colors[i],
+                    linewidth=gated_freq_lw, zorder=3,
+                    label=f"Gated signal {i + 1}")
+
+    # ------------------------------------------------------------
+    # Figure and grid
+    # ------------------------------------------------------------
+    fig = plt.figure(figsize=figsize)
+
+    grid = GridSpec(
+        2, 2, figure=fig,
+        height_ratios=[1.3, 1.0],
+        left=0.11, right=0.98, bottom=0.09, top=0.94,
+        wspace=0.22, hspace=row_hspace,
+    )
+
+    ax11 = fig.add_subplot(grid[0, 0])
+    ax12 = fig.add_subplot(grid[0, 1])
+    ax21 = fig.add_subplot(grid[1, 0])
+    ax22 = fig.add_subplot(grid[1, 1])
+
+    axes = np.array([[ax11, ax12], [ax21, ax22]])
+
+    # ------------------------------------------------------------
+    # ROW 1: original FT + gates + gated signals
+    # ------------------------------------------------------------
+    plot_original_ft(ax11, t1, signal_t1, gates_t1, gated_t1)
+    plot_original_ft(ax12, t2, signal_t2, gates_t2, gated_t2)
+
+    ax11.set_title(device1_label, fontsize=title_fs)
+    ax12.set_title(device2_label, fontsize=title_fs)
+
+    ax11.set_xlabel(time_label, fontsize=label_fs)
+    ax12.set_xlabel(time_label, fontsize=label_fs)
+
+    ax11.legend(loc="best", fontsize=legend_fs, frameon=False)
+    ax12.legend(loc="best", fontsize=legend_fs, frameon=False)
+
+    # ------------------------------------------------------------
+    # ROW 2: raw data + reconstructed spectra
+    # ------------------------------------------------------------
+    has_raw1 = plot_raw(ax21, freq_raw1, raw_f1, "Device 1")
+    has_raw2 = plot_raw(ax22, freq_raw2, raw_f2, "Device 2")
+
+    plot_gated_spectra(ax21, freq1, gated_f1, "Device 1")
+    plot_gated_spectra(ax22, freq2, gated_f2, "Device 2")
+
+    ax21.set_xlabel("Frequency (GHz)", fontsize=label_fs)
+    ax22.set_xlabel("Frequency (GHz)", fontsize=label_fs)
+
+    if has_raw1 or len(gated_f1) > 0:
+        ax21.legend(loc="best", fontsize=legend_fs, frameon=False)
+    if has_raw2 or len(gated_f2) > 0:
+        ax22.legend(loc="best", fontsize=legend_fs, frameon=False)
+
+    # ------------------------------------------------------------
+    # Y labels: left column only
+    # ------------------------------------------------------------
+    ax11.set_ylabel(ylabel_row1, fontsize=label_fs)
+    ax21.set_ylabel(ylabel_row2, fontsize=label_fs)
+
+    # ------------------------------------------------------------
+    # Axis limits
+    # ------------------------------------------------------------
+    if time_xlim is not None:
+        ax11.set_xlim(time_xlim)
+        ax12.set_xlim(time_xlim)
+
+    if freq_xlim is not None:
+        ax21.set_xlim(freq_xlim)
+        ax22.set_xlim(freq_xlim)
+
+    if time_ylim1 is not None:
+        ax11.set_ylim(time_ylim1)
+
+    if time_ylim2 is not None:
+        ax12.set_ylim(time_ylim2)
+
+    if freq_ylim1 is not None:
+        ax21.set_ylim(freq_ylim1)
+
+    if freq_ylim2 is not None:
+        ax22.set_ylim(freq_ylim2)
+
+    # ------------------------------------------------------------
+    # Axis formatting
+    # ------------------------------------------------------------
+    for ax in axes.flat:
+        setup_axis(ax)
+        format_scientific_axis(ax)
+
+    # ------------------------------------------------------------
+    # Save
+    # ------------------------------------------------------------
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight")
+
+    return fig, axes
