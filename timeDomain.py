@@ -1558,6 +1558,145 @@ class Analysis_timeD(Analysis_PSWS):
 
         fig.show()
 
+    def subtract_gated_dS_fromS(self, h_index, minf, maxf, time_0_R11, time_f_R11, time_0_R22, time_f_R22, time_0_T21, time_f_T21, time_0_T12, time_f_T12):
+        #components = ["11R", "11I", "12R", "12I", "21R", "21I", "22R", "22I"]
+        components = ["11","12","21","22"]
+        subtracted_S = {}
+
+        def decide_times(comp):
+            if comp=="11":
+                t0 = time_0_R11
+                tf = time_f_R11
+            if comp=="22":
+                t0 = time_0_R22
+                tf = time_f_R22
+            if comp=="12":
+                t0 = time_0_T12
+                tf = time_f_T12
+            if comp=="21":
+                t0 = time_0_T21
+                tf = time_f_T21
+            times= {
+                "t0": t0,
+                "tf": tf
+            }
+            return times
+
+        for comp in components:
+            re_comp = comp + 'R'
+            im_comp = comp + 'I'
+            y_array_re_2, y_array_im_2 = self.dS(re_comp)[h_index], self.dS(im_comp)[h_index]
+            S_t_2 = self.spectrum_to_time(
+                y_array_re_2,
+                y_array_im_2,
+                f_min = minf,
+                f_max = maxf,
+                window=None,
+                zero_padding=1,
+                plot=False
+            )
+
+            S_gated_2, gate_2 = self.time_gate(
+                S_t_2,
+                t_start=decide_times(comp)["t0"],
+                t_stop=decide_times(comp)["tf"],
+                gate_type="heaviside",  # "heaviside", #heaviside or tukey
+            )
+
+            freq_rec_2, S_rec_2 = self.time_to_spectrum(
+                S_gated_2,
+                zero_padding=1,
+                plot=False,
+            )
+
+            ###########Interpolation in order to be able to do Math
+            S_rec_2_interp = (
+                    np.interp(self.freq, freq_rec_2, np.real(S_rec_2))
+                    + 1j * np.interp(self.freq, freq_rec_2, np.imag(S_rec_2))
+            )
+
+            y_raw_re_2, y_raw_im_2 = self.rawS_0(re_comp)[h_index], self.rawS_0(im_comp)[h_index]
+
+            new_y_array_re = y_raw_re_2 - np.real(S_rec_2_interp)
+            new_y_array_im = y_raw_im_2 - np.imag(S_rec_2_interp)
+
+            subtracted_S[re_comp] = new_y_array_re
+            subtracted_S[im_comp] = new_y_array_im
+
+        subtracted_S["freq"] = self.freq
+
+        return subtracted_S
+
+    def gated_dS(self, h_index, minf, maxf, time_0_R11, time_f_R11, time_0_R22, time_f_R22, time_0_T21, time_f_T21, time_0_T12, time_f_T12):
+        #components = ["11R", "11I", "12R", "12I", "21R", "21I", "22R", "22I"]
+        components = ["11","12","21","22"]
+        subtracted_S = {}
+
+        def decide_times(comp):
+            if comp=="11":
+                t0 = time_0_R11
+                tf = time_f_R11
+            if comp=="22":
+                t0 = time_0_R22
+                tf = time_f_R22
+            if comp=="12":
+                t0 = time_0_T12
+                tf = time_f_T12
+            if comp=="21":
+                t0 = time_0_T21
+                tf = time_f_T21
+            times= {
+                "t0": t0,
+                "tf": tf
+            }
+            return times
+
+        for comp in components:
+            re_comp = comp + 'R'
+            im_comp = comp + 'I'
+            y_array_re_2, y_array_im_2 = self.dS(re_comp)[h_index], self.dS(im_comp)[h_index]
+            S_t_2 = self.spectrum_to_time(
+                y_array_re_2,
+                y_array_im_2,
+                f_min = minf,
+                f_max = maxf,
+                window=None,
+                zero_padding=1,
+                plot=False
+            )
+
+            S_gated_2, gate_2 = self.time_gate(
+                S_t_2,
+                t_start=decide_times(comp)["t0"],
+                t_stop=decide_times(comp)["tf"],
+                gate_type="heaviside",  # "heaviside", #heaviside or tukey
+            )
+
+            #dS_raw_2 = y_array_re_2 + 1j * y_array_im_2
+
+            freq_rec_2, S_rec_2 = self.time_to_spectrum(
+                S_gated_2,
+                zero_padding=1,
+                plot=False,
+            )
+
+            ###########Interpolation in order to be able to do Math
+            #S_rec_2_interp = (
+            #        np.interp(self.freq, freq_rec_2, np.real(S_rec_2))
+            #        + 1j * np.interp(self.freq, freq_rec_2, np.imag(S_rec_2))
+            #)
+
+            new_y_array_re = np.real(S_rec_2)
+            new_y_array_im = np.imag(S_rec_2)
+
+            subtracted_S[re_comp] = new_y_array_re
+            subtracted_S[im_comp] = new_y_array_im
+
+        subtracted_S["freq"] = freq_rec_2
+
+        return subtracted_S
+
+
 def plot_tof_comparison_claude(
     # Device 1
     t1,
@@ -1962,8 +2101,11 @@ def plot_tof_comparison_2row(
     # Styling
     original_lw=3.5,     # thickness of the original FT (background)
     gated_lw=1.3,        # thickness of the gated traces (on top)
-    gated_freq_lw=1.3,  # thickness of the gated traces (freq)
+    gated_freq_lw=1.3,   # thickness of the gated traces (freq)
     raw_lw=3.5,          # thickness of the raw frequency data
+    show_sum=True,       # plot the sum of the two gated spectra in row 2
+    sum_lw=1.6,          # thickness of the sum trace
+    sum_ls=(0, (4, 2)),  # line style of the sum trace (dashed)
 
     # Font sizes
     label_fs=10,         # axis labels (x and y)
@@ -1987,7 +2129,8 @@ def plot_tof_comparison_2row(
         Row 1: Original time-domain FT (thick, background) with the gate
                regions and the gated signals plotted on top of it
         Row 2: Raw frequency-domain data (thick, background) with the
-               gated, reconstructed spectra on top
+               gated, reconstructed spectra on top, plus (dashed) the
+               sum of the two gated spectra
 
     y_scale_time, y_scale_freq : float
         Independent scale factors. Time-domain (FT) row is plotted as
@@ -1998,6 +2141,10 @@ def plot_tof_comparison_2row(
     gated_t*, gates_t*, gated_f* : lists with 0, 1 or 2 arrays.
     freq_raw*, raw_f* : original frequency axis and original S trace
         (optional). Plotted behind the gated spectra in row 2.
+    show_sum : bool
+        If True and a device has two gated spectra, plot
+        |gated_f[0] + gated_f[1]| in row 2. The sum is taken BEFORE the
+        absolute value, so complex spectra add coherently.
     label_fs, tick_fs, title_fs, legend_fs : float
         Font sizes (pt) for axis labels, tick numbers, device titles
         and legends.
@@ -2029,6 +2176,8 @@ def plot_tof_comparison_2row(
     original_color = "#8FA3B8"
     gate_colors = ["#0072B2","#FE00F2"]#["#0072B2", "#D55E00"] #"#00CC96" greenish
     raw_color = "#D9A044"
+    # Near-black for the sum: contrasts with orange raw, blue and magenta
+    sum_color = "#1A1A1A"
 
     # ------------------------------------------------------------
     # Scaling and labels
@@ -2147,6 +2296,20 @@ def plot_tof_comparison_2row(
                     linewidth=gated_freq_lw, zorder=3,
                     label=f"Gated signal {i + 1}")
 
+    def plot_sum_spectrum(ax, freq, spectra, device_name):
+        """|gated_f[0] + gated_f[1]|, drawn on top of everything else.
+
+        Called after plot_gated_spectra, so freq and lengths have
+        already been validated. Needs two non-empty spectra.
+        """
+        valid = [sp for sp in spectra[:2] if sp is not None and len(sp) > 0]
+        if len(valid) < 2:
+            return
+        total = np.asarray(valid[0]) + np.asarray(valid[1])
+        ax.plot(freq, scaled_abs_freq(total), color=sum_color,
+                linestyle=sum_ls, linewidth=sum_lw, zorder=4,
+                label="Gated signal 1+2")
+
     # ------------------------------------------------------------
     # Figure and grid
     # ------------------------------------------------------------
@@ -2182,13 +2345,17 @@ def plot_tof_comparison_2row(
     ax12.legend(loc="best", fontsize=legend_fs, frameon=False)
 
     # ------------------------------------------------------------
-    # ROW 2: raw data + reconstructed spectra
+    # ROW 2: raw data + reconstructed spectra + their sum
     # ------------------------------------------------------------
     has_raw1 = plot_raw(ax21, freq_raw1, raw_f1, "Device 1")
     has_raw2 = plot_raw(ax22, freq_raw2, raw_f2, "Device 2")
 
     plot_gated_spectra(ax21, freq1, gated_f1, "Device 1")
     plot_gated_spectra(ax22, freq2, gated_f2, "Device 2")
+
+    if show_sum:
+        plot_sum_spectrum(ax21, freq1, gated_f1, "Device 1")
+        plot_sum_spectrum(ax22, freq2, gated_f2, "Device 2")
 
     ax21.set_xlabel("Frequency (GHz)", fontsize=label_fs)
     ax22.set_xlabel("Frequency (GHz)", fontsize=label_fs)
