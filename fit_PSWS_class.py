@@ -36,12 +36,12 @@ DEFAULT_UNITS_2 = {
 }
 
 # Bounds stored as dicts keyed by parameter name
-LOWER_BOUNDS = {"A":1e-1, "w":0.005, "fres":0.1, "fper":0.001, "fref":0.1, "phi":0, "D":0.1*1e-6, "re0":-10, "im0":-10}
+LOWER_BOUNDS = {"A":1e-5, "w":0.005, "fres":0.1, "fper":0.001, "fref":0.1, "phi":0, "D":0.1*1e-6, "re0":-10, "im0":-10}
 UPPER_BOUNDS = {"A":np.inf, "w":2, "fres":50, "fper":1, "fref":50, "phi":2*np.pi, "D":1000*1e-6, "re0":10, "im0":10}
 LOWER_BOUNDS_2 = {
-            "A1":1e-1, "w1":0.005, "fres1":0.1, "fper1":0.001, "fref1":0.1, "phi1":0, "D1":0.1*1e-6,
-            "A2":1e-1, "w2":0.05, "fres2":0.1, "fper2":0.001, "fref2":0.1, "phi2":0, "D2":0.1*1e-6,
-            "A3":1e-1, "w3":0.05, "fres3":0.1, "fper3":0.001, "fref3":0.1, "phi3":0, "D3":0.1*1e-6,
+            "A1":1e-4, "w1":0.005, "fres1":0.1, "fper1":0.001, "fref1":0.1, "phi1":0, "D1":0.1*1e-6,
+            "A2":1e-4, "w2":0.05, "fres2":0.1, "fper2":0.001, "fref2":0.1, "phi2":0, "D2":0.1*1e-6,
+            "A3":1e-4, "w3":0.05, "fres3":0.1, "fper3":0.001, "fref3":0.1, "phi3":0, "D3":0.1*1e-6,
             "re0":-10, "im0":-10
         }
 UPPER_BOUNDS_2 = {
@@ -105,6 +105,44 @@ class ComplexGaussianSimple(BaseComplexModel):
 
         return np.concatenate([re, im])
 
+class ComplexGaussianSimple_wscaled(BaseComplexModel):
+    def __init__(self):
+        param_names = ["A", "w", "fres", "fper", "phi", "re0", "im0"]
+        super().__init__(param_names)
+        self.lower_bounds = LOWER_BOUNDS
+        self.upper_bounds = UPPER_BOUNDS
+        self.fit_type = "frequency"
+
+    @staticmethod
+    def model(f, A, w, fres, fper, phi, re0, im0):
+        exp_term = A/w * np.exp(-((f - fres) / w) ** 2)
+
+        phase = 2 * np.pi * f / fper + phi
+
+        re = re0 + exp_term * np.cos(phase)
+        im = im0 + exp_term * np.sin(phase)
+
+        return np.concatenate([re, im])
+
+class ComplexGaussianSimple_wscaled_v2(BaseComplexModel):
+    def __init__(self):
+        param_names = ["A", "w", "fres", "fper", "phi", "re0", "im0"]
+        super().__init__(param_names)
+        self.lower_bounds = LOWER_BOUNDS
+        self.upper_bounds = UPPER_BOUNDS
+        self.fit_type = "frequency"
+
+    @staticmethod
+    def model(f, A, w, fres, fper, phi, re0, im0):
+        exp_term = A/w * np.exp(-((f - fres) / w) ** 2)
+
+        phase = 2 * np.pi * (f - fres) / fper + phi
+
+        re = re0 + exp_term * np.cos(phase)
+        im = im0 + exp_term * np.sin(phase)
+
+        return np.concatenate([re, im])
+
 class TwoComplexGaussian(BaseComplexModel):
     def __init__(self):
         param_names = ["A1", "w1", "fres1", "fper1", "fref1",
@@ -143,6 +181,46 @@ class TwoComplexGaussianSimple(BaseComplexModel):
         """
         z = (ComplexGaussianSimple.model(f, A1, w1, fres1, fper1, phi1, 0, 0) +
              ComplexGaussianSimple.model(f, A2, w2, fres2, fper2, phi2, re0, im0))
+        return z
+
+class TwoComplexGaussianSimple_wscaled(BaseComplexModel):
+    def __init__(self):
+        param_names = ["A1", "w1", "fres1", "fper1", "phi1",
+                       "A2", "w2", "fres2", "fper2", "phi2", "re0", "im0"]
+        super().__init__(param_names)
+        self.units = DEFAULT_UNITS_2
+        self.lower_bounds = LOWER_BOUNDS_2
+        self.upper_bounds = UPPER_BOUNDS_2
+        self.fit_type = "frequency"
+
+    @staticmethod
+    def model(f, A1, w1, fres1, fper1, phi1,
+                    A2, w2, fres2, fper2, phi2, re0, im0):
+        """
+        Sum of two complex Gaussians
+        """
+        z = (ComplexGaussianSimple_wscaled.model(f, A1, w1, fres1, fper1, phi1, 0, 0) +
+             ComplexGaussianSimple_wscaled.model(f, A2, w2, fres2, fper2, phi2, re0, im0))
+        return z
+
+class TwoComplexGaussianSimple_wscaled_v2(BaseComplexModel):
+    def __init__(self):
+        param_names = ["A1", "w1", "fres1", "fper1", "phi1",
+                       "A2", "w2", "fres2", "fper2", "phi2", "re0", "im0"]
+        super().__init__(param_names)
+        self.units = DEFAULT_UNITS_2
+        self.lower_bounds = LOWER_BOUNDS_2
+        self.upper_bounds = UPPER_BOUNDS_2
+        self.fit_type = "frequency"
+
+    @staticmethod
+    def model(f, A1, w1, fres1, fper1, phi1,
+                    A2, w2, fres2, fper2, phi2, re0, im0):
+        """
+        Sum of two complex Gaussians
+        """
+        z = (ComplexGaussianSimple_wscaled_v2.model(f, A1, w1, fres1, fper1, phi1, 0, 0) +
+             ComplexGaussianSimple_wscaled_v2.model(f, A2, w2, fres2, fper2, phi2, re0, im0))
         return z
 
 class ThreeComplexGaussianSimple(BaseComplexModel):
