@@ -55,7 +55,8 @@ class Analysis:
                 self.field = self.calc_field(geo)
             else:
                 self.field = f[self.field_add][:] #A (Data should be saved in T)
-    
+
+
     def rawS_0(self, target):
         """Target must be of the type ijR or ijI"""
         with h5py.File(self.file, "r") as f:
@@ -459,6 +460,8 @@ class Analysis_PSWS(Analysis):
         super().__init__(address, file_name, sample, setup, geo, **kwargs)
         self.sample = sample + "_" + device
         self.calc_data_add = "/calc/"
+        self.gated_data_add = "/gated/"
+
         with h5py.File(self.file, "r") as f:
             self.ref_idx = f["/info/Ref_idx"][()]  # [()] reads the scalar value
         if self.ref_idx == -1:
@@ -474,6 +477,11 @@ class Analysis_PSWS(Analysis):
     def dS(self, target):
         """Return the dLij array"""
         array = self.get_ij("dS", target, self.calc_data_add)
+        return array
+
+    def dS_gated(self, target):
+        """Return the dLij array"""
+        array = self.get_ij("dS", target, self.gated_data_add)
         return array
 
     def plot_dij_plotly(self, typ, idx, low_x, high_x, save=True, plot=True):
