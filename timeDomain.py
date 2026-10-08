@@ -2317,7 +2317,7 @@ def plot_tof_comparison_2row(
 
     grid = GridSpec(
         2, 2, figure=fig,
-        height_ratios=[1.3, 1.0],
+        height_ratios=[1.0, 1.0],
         left=0.11, right=0.98, bottom=0.09, top=0.94,
         wspace=0.22, hspace=row_hspace,
     )
