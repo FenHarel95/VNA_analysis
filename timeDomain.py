@@ -2060,6 +2060,7 @@ def plot_tof_comparison_claude(
 
 def plot_tof_comparison_2row(
     # Device 1
+    ij,
     t1,
     signal_t1,
     gated_t1=None,
@@ -2203,8 +2204,8 @@ def plot_tof_comparison_2row(
         suffix = rf"\;({sep.join(parts)})" if parts else ""
         return rf"$|{core}|{suffix}$"
 
-    ylabel_row1 = make_ylabel(r"\mathcal{FT}\;[\Delta S_{21}]", 1, "a.u.")
-    ylabel_row2 = make_ylabel(r"\Delta S_{21}", y_scale_freq, "U")
+    ylabel_row1 = make_ylabel(rf"\mathcal{{FT}}\;[\Delta S_{{{ij}}}]", 1, "a.u.")
+    ylabel_row2 = make_ylabel(rf"\Delta S_{{{ij}}}", y_scale_freq, "U")
 
     # ------------------------------------------------------------
     # Helpers
@@ -2393,6 +2394,309 @@ def plot_tof_comparison_2row(
 
     if freq_ylim2 is not None:
         ax22.set_ylim(freq_ylim2)
+
+    # ------------------------------------------------------------
+    # Axis formatting
+    # ------------------------------------------------------------
+    for ax in axes.flat:
+        setup_axis(ax)
+        format_scientific_axis(ax)
+
+    # ------------------------------------------------------------
+    # Save
+    # ------------------------------------------------------------
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight")
+
+    return fig, axes
+
+def plot_tof_single_2row(
+    ij,
+    t,
+    signal_t,
+    gated_t=None,
+    gates_t=None,
+    freq=None,
+    gated_f=None,
+    freq_raw=None,       # original frequency axis
+    raw_f=None,          # original S trace
+
+    # X limits
+    time_xlim=None,
+    freq_xlim=None,
+
+    # Y limits
+    time_ylim=None,
+    freq_ylim=None,
+
+    # Y-axis scaling (independent for time and frequency rows)
+    y_scale_time=1,      # row showing the time-domain FT
+    y_scale_freq=1,      # row showing the frequency-domain S21
+
+    # Labels
+    time_label="Time (ns)",
+
+    # Styling
+    original_lw=3.5,     # thickness of the original FT (background)
+    gated_lw=1.3,        # thickness of the gated traces (on top)
+    gated_freq_lw=1.3,   # thickness of the gated traces (freq)
+    raw_lw=3.5,          # thickness of the raw frequency data
+    show_sum=True,       # plot the sum of the two gated spectra in row 2
+    sum_lw=1.6,          # thickness of the sum trace
+    sum_ls=(0, (4, 2)),  # line style of the sum trace (dashed)
+
+    # Font sizes
+    label_fs=10,         # axis labels (x and y)
+    tick_fs=9,           # tick numbers (and the x10^n offset text)
+    legend_fs=8,         # legends
+
+    # Layout
+    row_hspace=0.28,     # gap between row 1 and row 2
+    height_ratios=(1.0, 1.0),  # relative heights of row 1 and row 2
+
+    # Saving
+    save_path=None,
+
+    # Figure
+    figsize=(3.6, 5.2),
+):
+    """
+    Publication-ready plot for time-of-flight spectroscopy (one device).
+
+    Layout (single column):
+        Row 1: Original time-domain FT (thick, background) with the gate
+               regions and the gated signals plotted on top of it
+        Row 2: Raw frequency-domain data (thick, background) with the
+               gated, reconstructed spectra on top, plus (dashed) the
+               sum of the two gated spectra
+
+    y_scale_time, y_scale_freq : float
+        Independent scale factors. Time-domain (FT) row is plotted as
+        |signal| / y_scale_time and the frequency-domain row as
+        |signal| / y_scale_freq (e.g. 1e-3 -> label x10^{-3}).
+    time_ylim, freq_ylim : tuple or None
+        y limits of row 1 and row 2 respectively.
+    gated_t, gates_t, gated_f : lists with 0, 1 or 2 arrays.
+    freq_raw, raw_f : original frequency axis and original S trace
+        (optional). Plotted behind the gated spectra in row 2.
+    show_sum : bool
+        If True and there are two gated spectra, plot
+        |gated_f[0] + gated_f[1]| in row 2. The sum is taken BEFORE the
+        absolute value, so complex spectra add coherently.
+    label_fs, tick_fs, legend_fs : float
+        Font sizes (pt) for axis labels, tick numbers and legends.
+    """
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    from matplotlib.ticker import ScalarFormatter
+
+    # ------------------------------------------------------------
+    # Defaults
+    # ------------------------------------------------------------
+    gated_t = [] if gated_t is None else gated_t
+    gates_t = [] if gates_t is None else gates_t
+    gated_f = [] if gated_f is None else gated_f
+
+    # ------------------------------------------------------------
+    # Colors
+    # ------------------------------------------------------------
+    # Lighter slate for the thick background FT so the dark-blue gated
+    # trace on top keeps its contrast
+    original_color = "#8FA3B8"
+    gate_colors = ["#0072B2", "#FE00F2"]
+    raw_color = "#D9A044"
+    # Near-black for the sum: contrasts with orange raw, blue and magenta
+    sum_color = "#1A1A1A"
+
+    # ------------------------------------------------------------
+    # Scaling and labels
+    # ------------------------------------------------------------
+    if y_scale_time <= 0 or y_scale_freq <= 0:
+        raise ValueError("y_scale_time and y_scale_freq must be positive.")
+
+    def scale_factor_str(y_scale):
+        """Mathtext '\\times 10^{n}' (n = log10(y_scale)), or '' if y_scale = 1."""
+        if np.isclose(y_scale, 1):
+            return ""
+        return rf"\times 10^{{{int(np.round(np.log10(y_scale)))}}}"
+
+    def make_ylabel(core, y_scale, unit=""):
+        """Mathtext y label: |core| (scale factor and/or unit)."""
+        parts = []
+        factor = scale_factor_str(y_scale)
+        if factor:
+            parts.append(factor)
+        if unit:
+            parts.append(rf"\mathrm{{{unit}}}")
+        sep = r"\;"
+        suffix = rf"\;({sep.join(parts)})" if parts else ""
+        return rf"$|{core}|{suffix}$"
+
+    ylabel_row1 = make_ylabel(rf"\mathcal{{FT}}\;[\Delta S_{{{ij}}}]", 1, "a.u.")
+    ylabel_row2 = make_ylabel(rf"\Delta S_{{{ij}}}", y_scale_freq, "U")
+
+    # ------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------
+    def scaled_abs_time(signal):
+        return np.abs(signal) / y_scale_time
+
+    def scaled_abs_freq(signal):
+        return np.abs(signal) / y_scale_freq
+
+    def setup_axis(ax):
+        ax.tick_params(direction="in", which="both",
+                       top=True, right=True, labelsize=tick_fs)
+        ax.minorticks_on()
+        ax.tick_params(which="minor", length=3)
+        ax.tick_params(which="major", length=5)
+
+    def format_scientific_axis(ax):
+        formatter = ScalarFormatter(useMathText=True)
+        formatter.set_powerlimits((-2, 2))
+        ax.yaxis.set_major_formatter(formatter)
+        # the "x10^n" offset text at the top of the y axis
+        ax.yaxis.get_offset_text().set_fontsize(tick_fs)
+
+    def add_gate_region(ax, t, gate, color):
+        """Shaded gate region and dashed boundaries (no legend entry)."""
+        gate = np.asarray(gate)
+        if len(gate) == 0:
+            return
+        active = np.where(gate > 1e-6)[0]
+        if len(active) == 0:
+            return
+
+        t_start = t[active[0]]
+        t_stop = t[active[-1]]
+
+        ax.axvspan(t_start, t_stop, color=color, alpha=0.12, lw=0, zorder=0)
+        for edge in (t_start, t_stop):
+            ax.axvline(edge, color=color, linestyle="--",
+                       linewidth=0.9, alpha=0.8, zorder=2)
+
+    def plot_original_ft(ax, t, signal, gates, gated):
+        """Thick background FT, gate regions, and gated traces on top."""
+        ax.plot(t, scaled_abs_time(signal), color=original_color,
+                linewidth=original_lw, zorder=1, label="Original FT")
+
+        for i, gate in enumerate(gates[:2]):
+            add_gate_region(ax, t, gate, gate_colors[i])
+
+        for i, sig in enumerate(gated[:2]):
+            if sig is None or len(sig) == 0:
+                continue
+            ax.plot(t, scaled_abs_time(sig), color=gate_colors[i],
+                    linewidth=gated_lw, zorder=3,
+                    label=f"Gated signal {i + 1}")
+
+    def plot_raw(ax, f_raw, s_raw):
+        if s_raw is None or len(s_raw) == 0:
+            return False
+        if f_raw is None:
+            raise ValueError(
+                "freq_raw must be provided when raw_f is used."
+            )
+        if len(f_raw) != len(s_raw):
+            raise ValueError(
+                f"freq_raw has length {len(f_raw)}, "
+                f"but raw_f has length {len(s_raw)}."
+            )
+        ax.plot(f_raw, scaled_abs_freq(s_raw), color=raw_color,
+                linewidth=raw_lw, zorder=1, label="Raw data")
+        return True
+
+    def plot_gated_spectra(ax, freq, spectra):
+        for i, spectrum in enumerate(spectra[:2]):
+            if spectrum is None or len(spectrum) == 0:
+                continue
+            if freq is None:
+                raise ValueError("freq must be provided when gated_f is used.")
+            if len(freq) != len(spectrum):
+                raise ValueError(
+                    f"freq has length {len(freq)}, "
+                    f"but gated_f[{i}] has length {len(spectrum)}."
+                )
+            ax.plot(freq, scaled_abs_freq(spectrum), color=gate_colors[i],
+                    linewidth=gated_freq_lw, zorder=3,
+                    label=f"Gated signal {i + 1}")
+
+    def plot_sum_spectrum(ax, freq, spectra):
+        """|gated_f[0] + gated_f[1]|, drawn on top of everything else.
+
+        Called after plot_gated_spectra, so freq and lengths have
+        already been validated. Needs two non-empty spectra.
+        """
+        valid = [sp for sp in spectra[:2] if sp is not None and len(sp) > 0]
+        if len(valid) < 2:
+            return
+        total = np.asarray(valid[0]) + np.asarray(valid[1])
+        ax.plot(freq, scaled_abs_freq(total), color=sum_color,
+                linestyle=sum_ls, linewidth=sum_lw, zorder=4,
+                label="Gated signal 1+2")
+
+    # ------------------------------------------------------------
+    # Figure and grid
+    # ------------------------------------------------------------
+    fig = plt.figure(figsize=figsize)
+
+    grid = GridSpec(
+        2, 1, figure=fig,
+        height_ratios=list(height_ratios),
+        left=0.20, right=0.97, bottom=0.09, top=0.97,
+        hspace=row_hspace,
+    )
+
+    ax1 = fig.add_subplot(grid[0, 0])
+    ax2 = fig.add_subplot(grid[1, 0])
+
+    axes = np.array([ax1, ax2])
+
+    # ------------------------------------------------------------
+    # ROW 1: original FT + gates + gated signals
+    # ------------------------------------------------------------
+    plot_original_ft(ax1, t, signal_t, gates_t, gated_t)
+
+    ax1.set_xlabel(time_label, fontsize=label_fs)
+    ax1.legend(loc="best", fontsize=legend_fs, frameon=False)
+
+    # ------------------------------------------------------------
+    # ROW 2: raw data + reconstructed spectra + their sum
+    # ------------------------------------------------------------
+    has_raw = plot_raw(ax2, freq_raw, raw_f)
+
+    plot_gated_spectra(ax2, freq, gated_f)
+
+    if show_sum:
+        plot_sum_spectrum(ax2, freq, gated_f)
+
+    ax2.set_xlabel("Frequency (GHz)", fontsize=label_fs)
+
+    if has_raw or len(gated_f) > 0:
+        ax2.legend(loc="best", fontsize=legend_fs, frameon=False)
+
+    # ------------------------------------------------------------
+    # Y labels
+    # ------------------------------------------------------------
+    ax1.set_ylabel(ylabel_row1, fontsize=label_fs)
+    ax2.set_ylabel(ylabel_row2, fontsize=label_fs)
+
+    # ------------------------------------------------------------
+    # Axis limits
+    # ------------------------------------------------------------
+    if time_xlim is not None:
+        ax1.set_xlim(time_xlim)
+
+    if freq_xlim is not None:
+        ax2.set_xlim(freq_xlim)
+
+    if time_ylim is not None:
+        ax1.set_ylim(time_ylim)
+
+    if freq_ylim is not None:
+        ax2.set_ylim(freq_ylim)
 
     # ------------------------------------------------------------
     # Axis formatting
