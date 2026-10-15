@@ -81,6 +81,15 @@ def kittel_general(H, gamma, Hx, Hy):
     f = gamma*np.sqrt( abs(H+Hx)*abs(H+Hy) ) #GHz
     return f
 
+def kittel_general_noAbs(H, gamma, Hx, Hy):
+    """
+    General FMR
+    gamma (GHz/T)
+    H (T)
+    """
+    f = gamma*np.sqrt( (H+Hx)*(H+Hy) ) #GHz
+    return f
+
 def kittel_cubic_inP(H,gamma,Ms,Hc,Hu,Hs,Hex,loo=True, n1=False):
     """
     FMR for films with cubic anisotropy. For Only valid for modes n=0,1
@@ -114,6 +123,8 @@ def kittel_cylinder_longA(H, gamma, Ms, Ku, Nz, Nx, Ny):
     hy = mu_0*Hu + (Nx-Nz)*Ms
     f = kittel_general(H, gamma, hx, hy)
     return f
+
+
 
 def inverse_kittel_general(f, gamma, Hx, Hy):
     """
