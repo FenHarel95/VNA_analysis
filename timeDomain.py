@@ -1245,6 +1245,8 @@ class Analysis_timeD(Analysis_PSWS):
             gate_type="heaviside",
             tukey_alpha=0.5,
             plot=True,
+            f_x_0=3.2,
+            f_x_f=4.725,
     ):
         """
         Apply a time-domain gate to a complex signal.
@@ -1414,7 +1416,9 @@ class Analysis_timeD(Analysis_PSWS):
 
             freq, spectrum = self.time_to_spectrum(
                 gated_signal,
-                plot=True
+                plot=True,
+                x_plot_0=f_x_0,
+                x_plot_f=f_x_f
             )
 
         return gated_signal, gate
@@ -1425,6 +1429,8 @@ class Analysis_timeD(Analysis_PSWS):
             zero_padding=1,
             positive_only=True,
             plot=False,
+            x_plot_0 = 3.5,
+            x_plot_f = 4.725
     ):
         """
         Convert a complex time-domain signal into the frequency domain.
@@ -1501,14 +1507,14 @@ class Analysis_timeD(Analysis_PSWS):
                 width=900,
                 height=500,
                 hovermode="x unified",
-                xaxis_range=[3.5, 4.6],
+                xaxis_range=[x_plot_0, x_plot_f],
             )
 
             fig.show()
 
         return freq, spectrum
 
-    def plot_dataVSgated(self, dS_data, freq_gated, dS_gated):
+    def plot_dataVSgated(self, dS_data, freq_gated, dS_gated, x_plot_0 = 3.5, x_plot_f = 4.725):
         fig = go.Figure()
 
         fig.add_trace(
@@ -1553,12 +1559,13 @@ class Analysis_timeD(Analysis_PSWS):
             width=900,
             height=500,
             hovermode="x unified",
-            xaxis_range=[3.5, 4.6],
+            xaxis_range=[x_plot_0, x_plot_f],
         )
 
         fig.show()
 
-    def subtract_gated_dS_fromS(self, h_index, minf, maxf, time_0_R11, time_f_R11, time_0_R22, time_f_R22, time_0_T21, time_f_T21, time_0_T12, time_f_T12):
+    def subtract_gated_dS_fromS(self, h_index, minf, maxf, time_0_R11, time_f_R11, time_0_R22, time_f_R22,
+                                time_0_T21, time_f_T21, time_0_T12, time_f_T12):
         #components = ["11R", "11I", "12R", "12I", "21R", "21I", "22R", "22I"]
         components = ["11","12","21","22"]
         subtracted_S = {}
@@ -1627,7 +1634,8 @@ class Analysis_timeD(Analysis_PSWS):
 
         return subtracted_S
 
-    def gated_dS(self, h_index, minf, maxf, time_0_R11, time_f_R11, time_0_R22, time_f_R22, time_0_T21, time_f_T21, time_0_T12, time_f_T12):
+    def gated_dS(self, h_index, minf, maxf, time_0_R11, time_f_R11, time_0_R22, time_f_R22,
+                 time_0_T21, time_f_T21, time_0_T12, time_f_T12):
         #components = ["11R", "11I", "12R", "12I", "21R", "21I", "22R", "22I"]
         components = ["11","12","21","22"]
         subtracted_S = {}
