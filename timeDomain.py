@@ -1,5 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
+import plotly.io as pio
 from data_handling import Analysis_PSWS
 
 import numpy as np
@@ -1514,55 +1515,79 @@ class Analysis_timeD(Analysis_PSWS):
 
         return freq, spectrum
 
-    def plot_dataVSgated(self, dS_data, freq_gated, dS_gated, x_plot_0 = 3.5, x_plot_f = 4.725):
+    def plot_dataVSgated(self, dS_data, freq_gated, dS_gated, x_plot_0=3.5, x_plot_f=4.725):
+        freq_data = np.asarray(self.freq)
+        freq_gated = np.asarray(freq_gated)
+
+        mag_data = np.abs(dS_data)
+        mag_gated = np.abs(dS_gated)
+
+        # Peak of each magnitude spectrum, restricted to the plotted window
+        def find_peak(freq, mag):
+            mask = (freq >= x_plot_0) & (freq <= x_plot_f)
+            if not mask.any():
+                mask = np.ones_like(freq, dtype=bool)
+            idx = np.argmax(np.where(mask, mag, -np.inf))
+            return freq[idx], mag[idx]
+
+        f_peak_data, m_peak_data = find_peak(freq_data, mag_data)
+        f_peak_gated, m_peak_gated = find_peak(freq_gated, mag_gated)
+
+        # Default colors, in the order Plotly assigns them to the four traces
+        colorway = pio.templates["plotly_white"].layout.colorway
+        c_abs_data = colorway[1]  # 2nd trace: |dS_data|
+        c_abs_gated = colorway[3]  # 4th trace: |dS_gated|
+
         fig = go.Figure()
 
-        fig.add_trace(
-            go.Scatter(
-                x=self.freq,
-                y=dS_data.real,
-                mode="lines",
-                name="Re(dS_data)"
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=self.freq,
-                y=np.abs(dS_data),
-                mode="lines",
-                name="|dS_data|"
-            )
-        )
+        fig.add_trace(go.Scatter(x=freq_data, y=dS_data.real, mode="lines", name="Re(dS_data)"))
+        fig.add_trace(go.Scatter(x=freq_data, y=mag_data, mode="lines", name="|dS_data|"))
+        fig.add_trace(go.Scatter(x=freq_gated, y=dS_gated.real, mode="lines", name="Re(dS_gated)"))
+        fig.add_trace(go.Scatter(x=freq_gated, y=mag_gated, mode="lines", name="|dS_gated|"))
 
-        fig.add_trace(
-            go.Scatter(
-                x=freq_gated,
-                y=dS_gated.real,
-                mode="lines",
-                name="Re(dS_gated)"
-            )
+        # Vertical dashed lines at the peaks
+        fig.add_vline(x=f_peak_data, line=dict(color=c_abs_data, dash="dash", width=1.5))
+        fig.add_vline(x=f_peak_gated, line=dict(color=c_abs_gated, dash="dash", width=1.5))
+
+        # Peak info, placed in the right margin just below the legend
+        label = (
+            f'<b>Maxima of |dS|</b><br>'
+            f'<span style="color:{c_abs_data}">data: {f_peak_data:.4f} GHz<br>'
+            f'&nbsp;&nbsp;|dS| = {m_peak_data:.3g}</span><br>'
+            f'<span style="color:{c_abs_gated}">gated: {f_peak_gated:.4f} GHz<br>'
+            f'&nbsp;&nbsp;|dS| = {m_peak_gated:.3g}</span>'
         )
-        fig.add_trace(
-            go.Scatter(
-                x=freq_gated,
-                y=np.abs(dS_gated),
-                mode="lines",
-                name="|dS_gated|"
-            )
+        fig.add_annotation(
+            text=label,
+            xref="paper", yref="paper",
+            x=1.02, y=0.62,  # lower y to move further down, raise to move up
+            xanchor="left", yanchor="top",
+            align="left",
+            showarrow=False,
+            bordercolor="lightgray",
+            borderwidth=1,
+            borderpad=4,
         )
 
         fig.update_layout(
-            title=f"Raw vs gated",
+            title="Raw vs gated",
             xaxis_title="frequency (GHz)",
             yaxis_title="dS",
             template="plotly_white",
-            width=900,
+            width=1100,
             height=500,
+            margin=dict(r=230),  # room for legend + peak box
+            legend=dict(x=1.02, y=1, xanchor="left", yanchor="top"),
             hovermode="x unified",
             xaxis_range=[x_plot_0, x_plot_f],
         )
 
         fig.show()
+
+        return {
+            "data": (f_peak_data, m_peak_data),
+            "gated": (f_peak_gated, m_peak_gated),
+        }
 
     def subtract_gated_dS_fromS(self, h_index, minf, maxf, time_0_R11, time_f_R11, time_0_R22, time_f_R22,
                                 time_0_T21, time_f_T21, time_0_T12, time_f_T12):
@@ -2106,6 +2131,8 @@ def plot_tof_comparison_2row(
     device1_label="Device 1",
     device2_label="Device 2",
     time_label="Time (ns)",
+    y_quantity = r"\Delta S",
+    y_unit = "U",
 
     # Styling
     original_lw=3.5,     # thickness of the original FT (background)
@@ -2212,8 +2239,8 @@ def plot_tof_comparison_2row(
         suffix = rf"\;({sep.join(parts)})" if parts else ""
         return rf"$|{core}|{suffix}$"
 
-    ylabel_row1 = make_ylabel(rf"\mathcal{{FT}}\;[\Delta S_{{{ij}}}]", 1, "a.u.")
-    ylabel_row2 = make_ylabel(rf"\Delta S_{{{ij}}}", y_scale_freq, "U")
+    ylabel_row1 = make_ylabel(rf"\mathcal{{FT}}\;[{{{y_quantity}}}_{{{ij}}}]", 1, "a.u.")
+    ylabel_row2 = make_ylabel(rf"{{{y_quantity}}}_{{{ij}}}", y_scale_freq, f"{y_unit}")
 
     # ------------------------------------------------------------
     # Helpers
@@ -2442,7 +2469,9 @@ def plot_tof_single_2row(
     y_scale_freq=1,      # row showing the frequency-domain S21
 
     # Labels
-    time_label="Time (ns)",
+    time_label = "time (ns)",
+    y_quantity = r"\Delta S",
+    y_unit = "U",
 
     # Styling
     original_lw=3.5,     # thickness of the original FT (background)
@@ -2542,8 +2571,8 @@ def plot_tof_single_2row(
         suffix = rf"\;({sep.join(parts)})" if parts else ""
         return rf"$|{core}|{suffix}$"
 
-    ylabel_row1 = make_ylabel(rf"\mathcal{{FT}}\;[\Delta S_{{{ij}}}]", 1, "a.u.")
-    ylabel_row2 = make_ylabel(rf"\Delta S_{{{ij}}}", y_scale_freq, "U")
+    ylabel_row1 = make_ylabel(rf"\mathcal{{FT}}\;[{{{y_quantity}}}_{{{ij}}}]", 1, "a.u.")
+    ylabel_row2 = make_ylabel(rf"{{{y_quantity}}}_{{{ij}}}", y_scale_freq, f"{y_unit}")
 
     # ------------------------------------------------------------
     # Helpers
