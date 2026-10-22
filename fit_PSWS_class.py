@@ -125,6 +125,7 @@ class ComplexGaussianSimple_wscaled(BaseComplexModel):
         return np.concatenate([re, im])
 
 class ComplexGaussianSimple_wscaled_v2(BaseComplexModel):
+    """This one included the resonance frequency in the phase of the oscillation"""
     def __init__(self):
         param_names = ["A", "w", "fres", "fper", "phi", "re0", "im0"]
         super().__init__(param_names)
@@ -204,6 +205,7 @@ class TwoComplexGaussianSimple_wscaled(BaseComplexModel):
         return z
 
 class TwoComplexGaussianSimple_wscaled_v2(BaseComplexModel):
+    """This one included the resonance frequency in the phase of the oscillation"""
     def __init__(self):
         param_names = ["A1", "w1", "fres1", "fper1", "phi1",
                        "A2", "w2", "fres2", "fper2", "phi2", "re0", "im0"]
