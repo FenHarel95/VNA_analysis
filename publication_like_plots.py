@@ -61,18 +61,16 @@ def plot_complex_fit(
         # --------------------------------------------------
 
         # Experimental
-        color_re_exp="#3978A8",  # "#1F4E79",
-        color_im_exp="#C65A5A",  # "#5B2C83",
+        color_re_exp= None,  # "#1F4E79",
+        color_im_exp= None,  # "#5B2C83",
+        color_magnitude= None,
 
         # Fits -- brighter
         color_re_fit="#4EA3FF",
-        color_re_fit_2="green",
-        color_re_fit_3="cyan",
-        color_im_fit="#A855F7",
-        color_mag_fit="black",
-
-        # Magnitude background
-        color_magnitude="#D9A044",
+        color_re_fit_2= None,
+        color_re_fit_3= None,
+        color_im_fit= None,
+        color_mag_fit= None,
 
         # --------------------------------------------------
         # Magnitude background
@@ -100,14 +98,22 @@ def plot_complex_fit(
         dpi=600
 ):
     # Experimental
+    # Default colors depending on ij
     if ij == "21":
-        color_re_exp = "#3978A8"  # "#1F4E79",
-        color_im_exp = "#C65A5A"  # "#5B2C83",
-        color_magnitude = "#D9A044"
-    if ij == "12":
-        color_re_exp = "#00AFC0"  # "#1F4E79",
-        color_im_exp = "#00CC96"  # "#5B2C83",
-        color_magnitude = "#8B70B0"
+        if color_re_exp is None:
+            color_re_exp = "#3978A8"
+        if color_im_exp is None:
+            color_im_exp = "#C65A5A"
+        if color_magnitude is None:
+            color_magnitude = "#D9A044"
+
+    elif ij == "12":
+        if color_re_exp is None:
+            color_re_exp = "#00AFC0"
+        if color_im_exp is None:
+            color_im_exp = "#00CC96"
+        if color_magnitude is None:
+            color_magnitude = "#8B70B0"
 
     # ==================================================
     # Figure
