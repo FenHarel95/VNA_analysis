@@ -43,8 +43,8 @@ class Analysis:
             self.field_add = "/data/magnet field"  # T
         if self.setup == "CHAOS":
             self.rawS_add = "/data/PNA5225b "
-            self.pow_add = "/data/PNA5225b power"
-            self.frq_add = "/data/PNA5225b f"
+            self.pow_add = "/data/PNA5225b power" #dB
+            self.frq_add = "/data/PNA5225b f" #Hz
             self.field_add = ""
 
         with h5py.File(self.file, "r") as f:
@@ -54,8 +54,10 @@ class Analysis:
                 self.freqs = f[self.frq_add][0, :] * (1e-9)  # GHz (Data should be saved in Hz)
                 self.curr = f[self.curr_add][:] #A (Data should be saved in A)
                 self.field = self.calc_field(geo)
+            elif self.setup == "CHAOS":
+                self.field = [] # we define it in the Class later
             else:
-                self.field = f[self.field_add][:] #A (Data should be saved in T)
+                self.field = f[self.field_add][:] # (Data should be saved in T)
 
 
     def rawS_0(self, target):
