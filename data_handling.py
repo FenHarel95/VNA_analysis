@@ -21,7 +21,6 @@ class Analysis:
         self.calc_add = "/calc/"
         self.raw_data_add = "/data/"
         self.info_add = "/info/"
-        self.files_as_h5 = h5py.File(self.file, "r")
 
         ### Custom variables according to setup
         if self.setup == "Konstanz_PSWS":
@@ -531,9 +530,10 @@ class Analysis_FMR_Konstanz(Analysis_FMR):
         Try several dataset paths and return the first one that exists.
         Raises an error if none exist.
         """
-        for p in possible_paths:
-            if p in self.files_as_h5:
-                return self.files_as_h5[p][:]
+        with h5py.File(self.file, "r") as f:
+            for p in possible_paths:
+                if p in f:
+                    return f[p][:]
         raise KeyError(f"None of the paths exist: {possible_paths}")
 
     #Vector magnet Field handling
