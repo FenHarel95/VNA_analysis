@@ -21,6 +21,7 @@ class Analysis:
         self.calc_add = "/calc/"
         self.raw_data_add = "/data/"
         self.info_add = "/info/"
+        self.files_as_h5 = h5py.File(self.file, "r")
 
         ### Custom variables according to setup
         if self.setup == "Konstanz_PSWS":
@@ -206,6 +207,9 @@ class Analysis:
         return data_dict
 
     def subtract_background_ij(self, typ, target, add, single, fit, ref_typ, ref_indx, ref_add, n_bg, sign=-1):
+        """Fit= True means a fit is peformed to the selected reference and then that is used to subtract.
+            Fit= False uses the selected reference data directly
+            n_bg is the order of background removal when using average background (single=False)"""
         initial = self.get_ij(typ, target, add)
         if single:
             if fit:
@@ -255,6 +259,9 @@ class Analysis:
         return final, background #final has a shape [field,freqs], background [freqs]
 
     def subtract_background_typ(self, typ, add, single, fit, ref_indx, ref_add, n_bg, sign=-1):
+        """Fit= True means a fit is peformed to the selected reference and then that is used to subtract.
+                    Fit= False uses the selected reference data directly
+                    n_bg is the order of background removal when using average background (single=False)"""
         data_dict = {}
         backg_dict = {}
         for name in self.components:
@@ -502,6 +509,71 @@ class Analysis_PSWS(Analysis):
         interact(plot_dij,
                  index=IntSlider(value=n_0, min=0, max=n_max, step=1, readout_format='.0f', description=r"Field index")
                  )
+
+class Analysis_FMR_Konstanz(Analysis_FMR):
+    """ Class that handles analysis of FMR spectroscopy data from Konstanz.
+    """
+
+    def __init__(self, address, file_name: str, sample: str, setup: str, vna_ref:str, **kwargs):
+        super().__init__(address, file_name, sample, setup, "inP", vna_ref, **kwargs)
+        #inP as geo is only a placeholder for initiation of parent class, field is defined below
+        self.rawS_add = "/data/PNA5225b "
+        self.xfield = self.load_any(["/data/xfield", "/data/rad-xfield"])  # T
+        self.yfield = self.load_any(["/data/yfield", "/data/angle-yfield"])  # T
+        self.zfield = self.load_any(["/data/zfield", "/data/plane-zfield"])  # T
+        self.field, self.direction = self.field_dir(self.xfield, self.yfield, self.zfield)  # T
+        self.field_pts = len(self.field)
+
+    def load_any(self, possible_paths):
+        """
+        Try several dataset paths and return the first one that exists.
+        Raises an error if none exist.
+        """
+        for p in possible_paths:
+            if p in self.files_as_h5:
+                return self.files_as_h5[p][:]
+        raise KeyError(f"None of the paths exist: {possible_paths}")
+
+    #Vector magnet Field handling
+    def field_dir(self, h_x, h_y, h_z):
+        """
+        Determine which field components vary significantly, and compute
+        the effective field magnitude using those components.
+
+        Parameters
+        ----------
+        h_x, h_y, h_z : array-like
+            Field components.
+
+        Returns
+        -------
+        H : ndarray
+            The effective field magnitude (only using components that vary > min_var).
+        direction : str
+            String containing the letters of the varying components, e.g. "x", "yz".
+        """
+
+        min_var = 5e-3  # T
+
+        # Variation of each component
+        var = [
+            np.max(h_x) - np.min(h_x),
+            np.max(h_y) - np.min(h_y),
+            np.max(h_z) - np.min(h_z)
+        ]
+
+        # Determine which components vary significantly
+        c = [v > min_var for v in var]  # booleans
+        direction = "".join(d for d, flag in zip("xyz", c) if flag)
+
+        # Compute effective field using only selected components
+        H = np.sqrt(
+            (c[0] * h_x) ** 2 +
+            (c[1] * h_y) ** 2 +
+            (c[2] * h_z) ** 2
+        )
+
+        return H, direction
 
 
 class FitStore:
