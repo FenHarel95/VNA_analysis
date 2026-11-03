@@ -55,6 +55,7 @@ class Analysis:
                 self.field = self.calc_field(geo)
             elif self.setup == "CHAOS":
                 self.field = [] # we define it in the Class later
+                self.freqs = f[self.frq_add][0, :] * (1e-9)  # GHz (Data should be saved in Hz)
             else:
                 self.field = f[self.field_add][:] # (Data should be saved in T)
 
@@ -127,7 +128,142 @@ class Analysis:
             field = self.field
         return field
 
-    def plot_ij_plotly(self, dic, idx:int, typ:str, low_x, high_x, comment:str, save = True, plot = True):
+    def plot_ij_plotly(
+            self, dic, idx: int, typ: str, low_x, high_x,
+            comment: str, save=True, plot=True
+    ):
+        """Plot available components of a complex S, Z, L, etc. matrix.
+
+        Parameters
+        ----------
+        components : list defined in class
+            Available components, e.g. ["11R", "11I", "21R", "21I"].
+            If None, all components are assumed available, but only
+            keys actually present in dic are plotted.
+        """
+        freqs_ghz = self.freqs  # assumes GHz
+
+        if self.components is None:
+            self.components = [
+                "11R", "11I", "12R", "12I",
+                "21R", "21I", "22R", "22I"
+            ]
+
+        # Create figure with two subplots
+        fig = make_subplots(
+            rows=2, cols=1,
+            shared_xaxes=False,
+            vertical_spacing=0.1
+        )
+
+        # Plot styles for each component
+        styles = {
+            "11R": {"name": f"Re({typ}11)", "color": "blue", "row": 1},
+            "11I": {"name": f"Im({typ}11)", "color": "red", "row": 1},
+            "22R": {"name": f"Re({typ}22)", "color": "cyan", "row": 1},
+            "22I": {"name": f"Im({typ}22)", "color": "magenta", "row": 1},
+            "12R": {"name": f"Re({typ}12)", "color": "blue", "row": 2},
+            "12I": {"name": f"Im({typ}12)", "color": "red", "row": 2},
+            "21R": {
+                "name": f"Re({typ}21)", "color": "cyan",
+                "dash": "dash", "row": 2
+            },
+            "21I": {
+                "name": f"Im({typ}21)", "color": "magenta",
+                "dash": "dash", "row": 2
+            },
+        }
+
+        # Add available real and imaginary components
+        for comp in self.components:
+            key = typ + comp
+
+            if key not in dic:
+                continue
+
+            style = styles.get(comp)
+            if style is None:
+                continue
+
+            fig.add_trace(
+                go.Scattergl(
+                    x=freqs_ghz,
+                    y=dic[key][idx],
+                    mode="lines",
+                    name=style["name"],
+                    line=dict(
+                        color=style["color"],
+                        dash=style.get("dash", "solid")
+                    )
+                ),
+                row=style["row"], col=1
+            )
+
+        # Add magnitudes only when both R and I are available
+        matrix_elements = {
+            "11": {"row": 1, "color": "orange"},
+            "22": {"row": 1, "color": "mediumpurple"},
+            "12": {"row": 2, "color": "orange"},
+            "21": {"row": 2, "color": "mediumpurple",
+                   "dash": "dash"},
+        }
+
+        for element, style in matrix_elements.items():
+            real_comp = element + "R"
+            imag_comp = element + "I"
+
+            if (real_comp in self.components and imag_comp in self.components
+                    and typ + real_comp in dic
+                    and typ + imag_comp in dic):
+                magnitude = self.calc_mag(
+                    dic[typ + real_comp][idx],
+                    dic[typ + imag_comp][idx]
+                )
+
+                fig.add_trace(
+                    go.Scattergl(
+                        x=freqs_ghz,
+                        y=magnitude,
+                        mode="lines",
+                        name=f"Mag({typ}{element})",
+                        line=dict(
+                            color=style["color"],
+                            dash=style.get("dash", "solid")
+                        )
+                    ),
+                    row=style["row"], col=1
+                )
+
+        # Update layout
+        fig.update_layout(
+            height=800,
+            width=850,
+            title=(
+                    f"Plotting {typ}ij for H({idx})="
+                    + str(int(1000 * self.field[idx])) + "mT"
+            ),
+            showlegend=True,
+            xaxis=dict(title="frequency (GHz)", range=[low_x, high_x]),
+            xaxis2=dict(title="frequency (GHz)", range=[low_x, high_x]),
+            yaxis=dict(title=f"{typ}ii (pH)", range=[-500, 500]),
+            yaxis2=dict(title=f"{typ}ij (pH)", range=[-150, 150]),
+        )
+
+        fig.update_xaxes(title_font_size=22, tickfont_size=16)
+        fig.update_yaxes(title_font_size=22, tickfont_size=16)
+
+        if save:
+            fig.write_html(
+                self.address / (
+                        self.sample + f"_{typ}ij_vsf" + comment
+                        + f"_{int(self.power)}dBm.html"
+                )
+            )
+
+        if plot:
+            fig.show()
+
+    def plot_ij_plotly_old(self, dic, idx:int, typ:str, low_x, high_x, comment:str, save = True, plot = True):
         """Plots dic_ij matrix. Assumes dic contains all ijR and ijI components.
         typ: is the type of quantity, e.g. S, Z, dZ, dL, etc."""
         freqs_ghz = self.freqs  # assumes GHz
@@ -277,6 +413,18 @@ class Analysis:
         """Plots the raw S matrix"""
         typ = "S"
         self.plot_ij_plotly(self.dic_typ(typ, self.rawS_add), idx, typ, low_x, high_x, "",save, plot)
+
+    def plot_rawij_slider(self, typ, n_0):
+        n_max = (self.get_ij("S", "11R", self.rawS_add)).shape[0] - 1
+
+        # Interactive sliders
+        def plot_dij(index):
+            self.plot_ij_plotly(self.dic_typ(typ, self.rawS_add), index, typ, self.freqs[0], np.max(self.freqs), "",
+                                save=False, plot=True)
+
+        interact(plot_dij,
+                 index=IntSlider(value=n_0, min=0, max=n_max, step=1, readout_format='.0f', description=r"Field index")
+                 )
 
     def write_ij_component(self, dataArray, address, key):
         with h5py.File(self.file, "a") as f:  # Open in append mode
@@ -524,6 +672,7 @@ class Analysis_FMR_Konstanz(Analysis_FMR):
         self.zfield = self.load_any(["/data/zfield", "/data/plane-zfield"])  # T
         self.field, self.direction = self.field_dir(self.xfield, self.yfield, self.zfield)  # T
         self.field_pts = len(self.field)
+        self.components = ["11R", "11I", "21R", "21I"] #Only this data is saved in CHAOS
 
     def load_any(self, possible_paths):
         """
