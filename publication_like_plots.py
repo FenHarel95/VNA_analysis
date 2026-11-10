@@ -29,8 +29,8 @@ def plot_complex_fit(
         # --------------------------------------------------
         # Labels
         # --------------------------------------------------
-        xlabel="Frequency (GHz)",
-        ylabel="Response (a.u.)",
+        xlabel="frequency (GHz)",
+        ylabel="response (a.u.)",
         xlabel_fontsize=13,
         ylabel_fontsize=13,
 
@@ -111,7 +111,7 @@ def plot_complex_fit(
         if color_re_exp is None:
             color_re_exp = "#00AFC0"
         if color_im_exp is None:
-            color_im_exp = "#00CC96"
+            color_im_exp = "#4EA3FF"#"#00CC96"
         if color_magnitude is None:
             color_magnitude = "#8B70B0"
 
