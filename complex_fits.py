@@ -277,20 +277,28 @@ class ComplexFitter:
     #####################
     # Plotting fits
     #####################
-    def plot_data_fit(self, param_set):
+    def plot_data_fit(self, param_set, mag_also=False):
         """
-        Plot real and imaginary parts with data and the model using param_set.
+        Plot real, imaginary and Mgnitude parts with data and the model using param_set.
         """
+        if mag_also:
+            data_mag = np.sqrt(self.mask_y_re * self.mask_y_re + self.mask_y_im * self.mask_y_im)
+            plt.scatter(self.mask_f, data_mag, s=50,
+                        facecolors='none', edgecolors='#8B70B0', label="Mag")
         plt.scatter(self.mask_f, self.mask_y_re, s=50, facecolors='none', edgecolors='blue', label="Re")
         plt.scatter(self.mask_f, self.mask_y_im, s=50, facecolors='none', edgecolors='red', label="Im")
+
 
         param_vals = self.model.model(self.mask_f, *[param_set[name] for name in self.model.param_names])
 
 
         fit_re, fit_im = self.unconcatenate(param_vals)
+        fit_mag= np.sqrt(fit_re*fit_re + fit_im*fit_im)
 
+        if mag_also: plt.plot(self.mask_f, fit_mag, 'magenta', label="Mag_fit")
         plt.plot(self.mask_f, fit_re, 'cyan', label="Re_fit")
         plt.plot(self.mask_f, fit_im, 'yellow', label="Im_fit")
+
 
         plt.axhline(0, color='black', linewidth=1)
         plt.gca().set_facecolor('#edf1f7')
@@ -303,17 +311,19 @@ class ComplexFitter:
         plt.legend()
         plt.show()
 
-    def plot_fit_simplex_wpm(self):
+    def plot_fit_simplex_wpm(self, mag_also=False):
         """
         Plots directly the result from the simplex_wpm().
         """
-        self.plot_data_fit(self.result_simplex_wpm)
+        condition = mag_also
+        self.plot_data_fit(self.result_simplex_wpm, mag_also=condition)
 
-    def plot_fit(self):
+    def plot_fit(self, mag_also=False):
         """
         Plots directly the result from the fit().
         """
-        self.plot_data_fit(self.result)
+        condition = mag_also
+        self.plot_data_fit(self.result, mag_also=condition)
 
     def param_manipulator(self, variation, step, param_set):
         """
@@ -345,8 +355,9 @@ class ComplexFitter:
             }
 
             #Pass the dictionary directly (no **kwargs!)
-            self.plot_data_fit(param_set=new_params)
+            self.plot_data_fit(param_set=new_params, mag_also=True)
             self.manip_parameters = new_params
+            print(self.manip_parameters)
         interact(wrapper, **relative_sliders)
         return self.manip_parameters
 
