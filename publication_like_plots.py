@@ -33,6 +33,7 @@ def plot_complex_fit(
         ylabel="response (a.u.)",
         xlabel_fontsize=13,
         ylabel_fontsize=13,
+        quantity = r"\Delta \hat{S}",
 
         # --------------------------------------------------
         # Tick formatting
@@ -133,7 +134,7 @@ def plot_complex_fit(
         markersize=markersize,
         # markevery=20,
         markerfacecolor='none',
-        label=rf"Mag($\Delta \hat{{S}}_{{{ij}}}$)",
+        label=rf"Mag({quantity}$_{{{ij}}}$)",
         zorder=1
     )
 
@@ -166,7 +167,8 @@ def plot_complex_fit(
             markersize=markersize,
             # markevery=5,
             markerfacecolor='none',
-            label=rf"Im($\Delta \hat{{S}}_{{{ij}}}$)",
+            #label=rf"Im($\Delta \hat{{S}}_{{{ij}}}$)",
+            label=rf"Im({quantity}$_{{{ij}}}$)",
             zorder=2
         )
 
